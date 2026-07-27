@@ -1,0 +1,2 @@
+# SokchhornInventory
+inventorycontrol all
