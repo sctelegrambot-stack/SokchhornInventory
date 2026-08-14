@@ -1,0 +1,22 @@
+app = "sokchhorn-bot"
+primary_region = "sin"
+
+[env]
+  PORT = "8080"
+  DB_PATH = "/data/inventory.db"
+  LANG_FILE = "/data/lang_prefs.json"
+  SYSTEM_DB_PATH = "/data/system.db"
+  # Mark the session cookie Secure because Fly force_https is enabled.
+  # Do NOT set DESKTOP_LOGIN_TOKEN here: desktop auto-login is only for loopback.
+  SESSION_COOKIE_SECURE = "1"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+[mounts]
+  source = "data"
+  destination = "/data"

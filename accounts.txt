@@ -1,0 +1,23 @@
+=== Sokchhorn Inventory Bot - Accounts ===
+
+--- DASHBOARD (Web Admin) ---
+URL: https://a42977-d760.c.jrnm.app/  (cloud) OR http://127.0.0.1:5000 (local)
+Username: admin@sokchhorn
+Password: 1234
+
+--- PIN PROTECTION ---
+Default unlock PIN: 123321
+Unlock PIN Gates Import. Change it at Dashboard → ⚙️ Settings.
+
+--- SETTINGS ---
+Dashboard → ⚙️ Settings (gear icon in sidebar)
+• Change admin password
+• Change bot unlock PIN
+
+--- SELF-HOSTING (Spare PC) ---
+1. Install Python 3.11+ from python.org
+2. Copy entire folder to spare PC
+3. Run setup_spare_pc.bat (one-time)
+4. Double-click start_bot.bat (auto-starts bot + ngrok + dashboard)
+5. URL is shown automatically — open on your phone
+6. Login: admin@sokchhorn / 1234

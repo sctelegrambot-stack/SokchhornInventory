@@ -1,0 +1,56 @@
+C:\sokchhorn_spare_pc\main.py:894: PTBUserWarning: If 'per_message=False', 'CallbackQueryHandler' will not be tracked for every message. Read this FAQ entry to learn more about the per_* settings: https://github.com/python-telegram-bot/python-telegram-bot/wiki/Frequently-Asked-Questions#what-do-the-per_-settings-in-conversationhandler-do.
+  conv_handler_item = ConversationHandler(
+C:\sokchhorn_spare_pc\main.py:1098: PTBUserWarning: If 'per_message=False', 'CallbackQueryHandler' will not be tracked for every message. Read this FAQ entry to learn more about the per_* settings: https://github.com/python-telegram-bot/python-telegram-bot/wiki/Frequently-Asked-Questions#what-do-the-per_-settings-in-conversationhandler-do.
+  conv_handler_sell = ConversationHandler(
+C:\sokchhorn_spare_pc\main.py:1202: PTBUserWarning: If 'per_message=False', 'CallbackQueryHandler' will not be tracked for every message. Read this FAQ entry to learn more about the per_* settings: https://github.com/python-telegram-bot/python-telegram-bot/wiki/Frequently-Asked-Questions#what-do-the-per_-settings-in-conversationhandler-do.
+  conv_handler_stock = ConversationHandler(
+C:\sokchhorn_spare_pc\main.py:1261: PTBUserWarning: If 'per_message=False', 'CallbackQueryHandler' will not be tracked for every message. Read this FAQ entry to learn more about the per_* settings: https://github.com/python-telegram-bot/python-telegram-bot/wiki/Frequently-Asked-Questions#what-do-the-per_-settings-in-conversationhandler-do.
+  conv_handler_brand = ConversationHandler(
+C:\sokchhorn_spare_pc\main.py:1447: PTBUserWarning: If 'per_message=False', 'CallbackQueryHandler' will not be tracked for every message. Read this FAQ entry to learn more about the per_* settings: https://github.com/python-telegram-bot/python-telegram-bot/wiki/Frequently-Asked-Questions#what-do-the-per_-settings-in-conversationhandler-do.
+  conv_handler_import_product = ConversationHandler(
+C:\sokchhorn_spare_pc\main.py:1555: PTBUserWarning: If 'per_message=False', 'CallbackQueryHandler' will not be tracked for every message. Read this FAQ entry to learn more about the per_* settings: https://github.com/python-telegram-bot/python-telegram-bot/wiki/Frequently-Asked-Questions#what-do-the-per_-settings-in-conversationhandler-do.
+  conv_handler_import_customer = ConversationHandler(
+C:\sokchhorn_spare_pc\main.py:1620: PTBUserWarning: If 'per_message=False', 'CallbackQueryHandler' will not be tracked for every message. Read this FAQ entry to learn more about the per_* settings: https://github.com/python-telegram-bot/python-telegram-bot/wiki/Frequently-Asked-Questions#what-do-the-per_-settings-in-conversationhandler-do.
+  conv_handler_staff = ConversationHandler(
+C:\sokchhorn_spare_pc\main.py:1733: PTBUserWarning: If 'per_message=False', 'CallbackQueryHandler' will not be tracked for every message. Read this FAQ entry to learn more about the per_* settings: https://github.com/python-telegram-bot/python-telegram-bot/wiki/Frequently-Asked-Questions#what-do-the-per_-settings-in-conversationhandler-do.
+  conv_handler_debt = ConversationHandler(
+C:\sokchhorn_spare_pc\main.py:1810: PTBUserWarning: If 'per_message=False', 'CallbackQueryHandler' will not be tracked for every message. Read this FAQ entry to learn more about the per_* settings: https://github.com/python-telegram-bot/python-telegram-bot/wiki/Frequently-Asked-Questions#what-do-the-per_-settings-in-conversationhandler-do.
+  conv_handler_payment = ConversationHandler(
+C:\sokchhorn_spare_pc\main.py:1859: PTBUserWarning: If 'per_message=False', 'CallbackQueryHandler' will not be tracked for every message. Read this FAQ entry to learn more about the per_* settings: https://github.com/python-telegram-bot/python-telegram-bot/wiki/Frequently-Asked-Questions#what-do-the-per_-settings-in-conversationhandler-do.
+  conv_handler_balance = ConversationHandler(
+C:\sokchhorn_spare_pc\main.py:1905: PTBUserWarning: If 'per_message=False', 'CallbackQueryHandler' will not be tracked for every message. Read this FAQ entry to learn more about the per_* settings: https://github.com/python-telegram-bot/python-telegram-bot/wiki/Frequently-Asked-Questions#what-do-the-per_-settings-in-conversationhandler-do.
+  conv_handler_history = ConversationHandler(
+C:\sokchhorn_spare_pc\main.py:2128: PTBUserWarning: If 'per_message=False', 'CallbackQueryHandler' will not be tracked for every message. Read this FAQ entry to learn more about the per_* settings: https://github.com/python-telegram-bot/python-telegram-bot/wiki/Frequently-Asked-Questions#what-do-the-per_-settings-in-conversationhandler-do.
+  conv_handler_csr = ConversationHandler(
+2026-07-12 11:56:54,681 - __main__ - INFO - Bot started with token 88000806...
+2026-07-12 11:56:55,426 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8800080600:AAE8VVWQAKDj3bSgo3dxfr7YJpvFOSKZgtk/getMe "HTTP/1.1 200 OK"
+2026-07-12 11:56:55,650 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8800080600:AAE8VVWQAKDj3bSgo3dxfr7YJpvFOSKZgtk/deleteWebhook "HTTP/1.1 200 OK"
+2026-07-12 11:56:55,655 - apscheduler.scheduler - INFO - Scheduler started
+2026-07-12 11:56:55,656 - telegram.ext.Application - INFO - Application started
+2026-07-12 11:57:06,301 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8800080600:AAE8VVWQAKDj3bSgo3dxfr7YJpvFOSKZgtk/getUpdates "HTTP/1.1 200 OK"
+2026-07-12 11:57:16,533 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8800080600:AAE8VVWQAKDj3bSgo3dxfr7YJpvFOSKZgtk/getUpdates "HTTP/1.1 200 OK"
+2026-07-12 11:57:26,753 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8800080600:AAE8VVWQAKDj3bSgo3dxfr7YJpvFOSKZgtk/getUpdates "HTTP/1.1 200 OK"
+2026-07-12 11:57:36,979 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8800080600:AAE8VVWQAKDj3bSgo3dxfr7YJpvFOSKZgtk/getUpdates "HTTP/1.1 200 OK"
+2026-07-12 11:57:47,194 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8800080600:AAE8VVWQAKDj3bSgo3dxfr7YJpvFOSKZgtk/getUpdates "HTTP/1.1 200 OK"
+2026-07-12 11:57:57,439 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8800080600:AAE8VVWQAKDj3bSgo3dxfr7YJpvFOSKZgtk/getUpdates "HTTP/1.1 200 OK"
+2026-07-12 11:58:07,660 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8800080600:AAE8VVWQAKDj3bSgo3dxfr7YJpvFOSKZgtk/getUpdates "HTTP/1.1 200 OK"
+2026-07-12 11:58:17,906 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8800080600:AAE8VVWQAKDj3bSgo3dxfr7YJpvFOSKZgtk/getUpdates "HTTP/1.1 200 OK"
+2026-07-12 11:58:28,164 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8800080600:AAE8VVWQAKDj3bSgo3dxfr7YJpvFOSKZgtk/getUpdates "HTTP/1.1 200 OK"
+2026-07-12 11:58:38,433 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8800080600:AAE8VVWQAKDj3bSgo3dxfr7YJpvFOSKZgtk/getUpdates "HTTP/1.1 200 OK"
+2026-07-12 11:58:48,688 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8800080600:AAE8VVWQAKDj3bSgo3dxfr7YJpvFOSKZgtk/getUpdates "HTTP/1.1 200 OK"
+2026-07-12 11:58:58,917 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8800080600:AAE8VVWQAKDj3bSgo3dxfr7YJpvFOSKZgtk/getUpdates "HTTP/1.1 200 OK"
+2026-07-12 11:59:09,142 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8800080600:AAE8VVWQAKDj3bSgo3dxfr7YJpvFOSKZgtk/getUpdates "HTTP/1.1 200 OK"
+2026-07-12 11:59:10,717 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8800080600:AAE8VVWQAKDj3bSgo3dxfr7YJpvFOSKZgtk/getUpdates "HTTP/1.1 200 OK"
+2026-07-12 11:59:11,635 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8800080600:AAE8VVWQAKDj3bSgo3dxfr7YJpvFOSKZgtk/answerCallbackQuery "HTTP/1.1 200 OK"
+2026-07-12 11:59:12,044 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8800080600:AAE8VVWQAKDj3bSgo3dxfr7YJpvFOSKZgtk/editMessageText "HTTP/1.1 200 OK"
+2026-07-12 11:59:19,101 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8800080600:AAE8VVWQAKDj3bSgo3dxfr7YJpvFOSKZgtk/getUpdates "HTTP/1.1 200 OK"
+2026-07-12 11:59:20,024 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8800080600:AAE8VVWQAKDj3bSgo3dxfr7YJpvFOSKZgtk/answerCallbackQuery "HTTP/1.1 200 OK"
+2026-07-12 11:59:20,444 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8800080600:AAE8VVWQAKDj3bSgo3dxfr7YJpvFOSKZgtk/editMessageText "HTTP/1.1 200 OK"
+2026-07-12 11:59:29,324 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8800080600:AAE8VVWQAKDj3bSgo3dxfr7YJpvFOSKZgtk/getUpdates "HTTP/1.1 200 OK"
+2026-07-12 11:59:39,545 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8800080600:AAE8VVWQAKDj3bSgo3dxfr7YJpvFOSKZgtk/getUpdates "HTTP/1.1 200 OK"
+2026-07-12 11:59:49,766 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8800080600:AAE8VVWQAKDj3bSgo3dxfr7YJpvFOSKZgtk/getUpdates "HTTP/1.1 200 OK"
+2026-07-12 11:59:59,988 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8800080600:AAE8VVWQAKDj3bSgo3dxfr7YJpvFOSKZgtk/getUpdates "HTTP/1.1 200 OK"
+2026-07-12 12:00:10,208 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8800080600:AAE8VVWQAKDj3bSgo3dxfr7YJpvFOSKZgtk/getUpdates "HTTP/1.1 200 OK"
+2026-07-12 12:00:20,493 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8800080600:AAE8VVWQAKDj3bSgo3dxfr7YJpvFOSKZgtk/getUpdates "HTTP/1.1 200 OK"
+2026-07-12 12:00:30,727 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8800080600:AAE8VVWQAKDj3bSgo3dxfr7YJpvFOSKZgtk/getUpdates "HTTP/1.1 200 OK"
+2026-07-12 12:00:40,961 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8800080600:AAE8VVWQAKDj3bSgo3dxfr7YJpvFOSKZgtk/getUpdates "HTTP/1.1 200 OK"
