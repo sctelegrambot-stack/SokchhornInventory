@@ -1,0 +1,58 @@
+============================================
+  NGROK SETUP GUIDE (Simpler Backup)
+  (Access dashboard from anywhere - free)
+============================================
+
+Step 1: Download ngrok
+------------------------------------------------
+1. Go to https://ngrok.com/download
+2. Download the Windows version
+3. Extract the zip to C:\ngrok\ngrok.exe
+   (Or remember where you saved it)
+
+Step 2: Test the tunnel
+------------------------------------------------
+Open a Command Prompt and run:
+
+   ngrok http 5000
+
+You'll see a screen showing:
+   "Forwarding  https://abc123.ngrok-free.app -> http://localhost:5000"
+
+That URL is your public dashboard! Copy it.
+
+Step 3: Set DASHBOARD_URL
+------------------------------------------------
+Open ANOTHER Command Prompt (keep ngrok running) and run:
+
+   setx DASHBOARD_URL "https://abc123.ngrok-free.app/"
+
+Step 4: Update start_bot.bat
+------------------------------------------------
+Open start_bot.bat with Notepad.
+
+Comment out the Cloudflare line (add REM in front):
+   REM start "Cloudflare Tunnel" ...
+
+Uncomment the ngrok line (remove REM):
+   start "ngrok Tunnel" ngrok http 5000
+
+Step 5: Run the bot
+------------------------------------------------
+Close any running ngrok first, then double-click start_bot.bat
+
+Step 6: Access dashboard
+------------------------------------------------
+Open your phone browser and go to:
+   https://abc123.ngrok-free.app/
+
+Login with: admin@sokchhorn / 1234
+
+============================================
+  NGROK FREE TIER LIMITS
+============================================
+- 40 connections per minute (enough for 1 person)
+- URL changes on restart (like trycloudflare)
+- Web interface at http://127.0.0.1:4040 shows live URL
+
+============================================

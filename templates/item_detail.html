@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row">
+    <div class="col-md-4">
+        <div class="card stat-card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                  <h5>{{ item.brand_emoji or '' }} {{ item.name }}</h5>
+                  <button class="btn btn-sm {{ 'btn-outline-warning' if session.get('prices_unlocked') else 'btn-outline-secondary' }}" onclick="{{ 'lockPrices()' if session.get('prices_unlocked') else 'showPinBubble()' }}" style="font-size:.7rem">
+                    <i class="bi {{ 'bi-unlock' if session.get('prices_unlocked') else 'bi-lock' }}"></i>
+                  </button>
+                </div>
+                <table class="table table-sm">
+                    <tr><td>Brand</td><td><strong>{{ item.brand_name or item.category }}</strong></td></tr>
+                    <tr><td>Group</td><td>{{ item.group_emoji or '' }} {{ item.group_name or '' }}</td></tr>
+                    <tr><td>RAM</td><td>{{ item.ram or '—' }}</td></tr>
+                    <tr><td>ROM</td><td>{{ item.rom or '—' }}</td></tr>
+                    <tr><td>Product Code</td><td>{{ item.product_code or '—' }}</td></tr>
+                    <tr><td>Retail Price</td><td><strong>{% if session.get('prices_unlocked') %}${{ "%.0f"|format(item.price) if item.price else '—' }}{% else %}<i class="bi bi-lock text-muted"></i>{% endif %}</strong></td></tr>
+                    <tr><td>Cost Price</td><td>{% if session.get('prices_unlocked') %}${{ "%.0f"|format(item.cost_price) if item.cost_price else '—' }}{% else %}<i class="bi bi-lock text-muted"></i>{% endif %}</td></tr>
+                    <tr><td>Stock</td><td><span class="badge bg-{{ 'success' if item.quantity > 10 else 'warning' if item.quantity > 0 else 'danger' }}">{{ item.quantity }}</span></td></tr>
+                    <tr><td>Investment</td><td>{% if session.get('prices_unlocked') %}${{ "%.0f"|format((item.cost_price or 0) * item.quantity) }}{% else %}<i class="bi bi-lock text-muted"></i>{% endif %}</td></tr>
+                </table>
+
+                <h6 class="mt-4">Update Item</h6>
+                <form method="POST">
+                    <div class="mb-2"><label class="form-label small">Name</label><input type="text" name="name" class="form-control form-control-sm" value="{{ item.name }}"></div>
+                    <div class="mb-2"><label class="form-label small">RAM</label><input type="text" name="ram" class="form-control form-control-sm" value="{{ item.ram or '' }}"></div>
+                    <div class="mb-2"><label class="form-label small">ROM</label><input type="text" name="rom" class="form-control form-control-sm" value="{{ item.rom or '' }}"></div>
+                    <div class="mb-2"><label class="form-label small">Product Code</label><input type="text" name="product_code" class="form-control form-control-sm" value="{{ item.product_code or '' }}"></div>
+                    <div class="mb-2"><label class="form-label small">Group</label><input type="text" name="group" class="form-control form-control-sm" value="{{ item.group_name or '' }}"></div>
+                    <div class="mb-2"><label class="form-label small">Retail Price</label><input type="text" name="price" class="form-control form-control-sm" value="{{ item.price if item.price is not none else '' }}"></div>
+                    <div class="mb-2"><label class="form-label small">Cost Price</label><input type="text" name="cost_price" class="form-control form-control-sm" value="{{ item.cost_price if item.cost_price is not none else '' }}"></div>
+                    <button type="submit" class="btn btn-primary btn-sm">Save Changes</button>
+                </form>
+
+                <h6 class="mt-4">Add Stock</h6>
+                <form method="POST" action="{{ url_for('add_stock') }}">
+                    <input type="hidden" name="item_id" value="{{ item.id }}">
+                    <div class="mb-2"><label class="form-label small">Quantity</label><input type="number" name="qty" class="form-control form-control-sm" min="1" required></div>
+                    <div class="mb-2"><label class="form-label small">Cost Price (per unit)</label><input type="text" name="cost_price" class="form-control form-control-sm" placeholder="Leave blank to keep avg"></div>
+                    <button type="submit" class="btn btn-success btn-sm">Add Stock</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-8">
+        <div class="card stat-card">
+            <div class="card-header bg-white"><strong><i class="bi bi-clock-history"></i> Sales History</strong></div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead><tr><th>ID</th><th>Qty</th><th>Revenue</th><th>Date</th></tr></thead>
+                        <tbody>
+                            {% for s in sales_history %}
+                            <tr><td>{{ s.id }}</td><td>{{ s.quantity }}</td><td>${{ "%.0f"|format(s.quantity * (s.sellout_price|float if s.sellout_price else item.price)) }}</td><td><small>{{ s.timestamp[:10] }}</small></td></tr>
+                            {% else %}
+                            <tr><td colspan="4" class="text-center text-muted py-3">No sales recorded</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

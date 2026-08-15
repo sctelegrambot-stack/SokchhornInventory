@@ -1,0 +1,21 @@
+.env
+inventory.db
+__pycache__/
+venv/
+accounts.txt
+cookies.txt
+secret_key.txt
+*.log
+exports/
+
+# build artifacts / binaries
+bin/
+dist/
+*.exe
+webview_data/
+InventoryBot_Standalone/
+imports/
+
+# runtime logs (may contain the bot token)
+bot_err*.txt
+bot_out.txt

@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
+    <h4 class="mb-2"><i class="bi bi-cart"></i> {{ _d('title_sales') }}</h4>
+    <div class="d-flex gap-2 align-items-center">
+        <a href="{{ url_for('export_sales', days=days) }}" class="btn btn-sm btn-success"><i class="bi bi-file-earmark-excel"></i> {{ _d('excel') }}</a>
+        <form method="GET" class="d-flex gap-2 align-items-center">
+        <label class="small">Last</label>
+        <select name="days" class="form-select form-select-sm" style="width:auto" onchange="this.form.submit()">
+            <option value="1" {% if days == 1 %}selected{% endif %}>1 day</option>
+            <option value="7" {% if days == 7 %}selected{% endif %}>7 days</option>
+            <option value="30" {% if days == 30 %}selected{% endif %}>30 days</option>
+            <option value="90" {% if days == 90 %}selected{% endif %}>90 days</option>
+            <option value="365" {% if days == 365 %}selected{% endif %}>1 year</option>
+        </select>
+    </form>
+    </div>
+</div>
+
+<div class="row g-2 mb-3">
+    <div class="col-md-4"><div class="card stat-card p-3 bg-success bg-gradient text-white"><div class="stat-value">${{ "%.0f"|format(total_revenue) }}</div><div class="stat-label">Total Revenue</div></div></div>
+    <div class="col-md-4"><div class="card stat-card p-3 bg-info bg-gradient text-white"><div class="stat-value">${{ "%.0f"|format(total_profit) }}</div><div class="stat-label">Gross Profit</div></div></div>
+    <div class="col-md-4"><div class="card stat-card p-3 bg-primary bg-gradient text-white"><div class="stat-value">{{ sales|length }}</div><div class="stat-label">Transactions</div></div></div>
+</div>
+
+<div class="card stat-card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead><tr><th>ID</th><th>{{ _d('item') }}</th><th>{{ _d('brand') }}</th><th>{{ _d('qty') }}</th><th>{{ _d('price') }}</th><th>Delivery</th><th>{{ _d('revenue') }}</th><th>{{ _d('cost') }}</th><th>{{ _d('profit') }}</th><th>{{ _d('imei') }}</th><th>Staff</th><th>{{ _d('date') }}</th><th>{{ _d('actions') }}</th></tr></thead>
+                <tbody>
+                    {% for s in sales %}
+                    <tr class="{{ 'table-secondary text-muted' if s.returned }}">
+                        <td><small>{{ s.id }}</small></td>
+                        <td>{% if s.returned %}<s>{% endif %}{{ s.item_name }}{% if s.returned %}</s>{% endif %}</td>
+                        <td><small>{{ s.brand }}</small></td>
+                        <td>{{ s.quantity }}</td>
+                        <td>${{ "%.0f"|format(s.price) }}</td>
+                        <td>${{ "%.0f"|format(s.delivery_fee|float) if s.delivery_fee else '—' }}</td>
+                        <td>${{ "%.0f"|format(s.quantity * s.price + (s.delivery_fee|float or 0)) }}</td>
+                        <td>${{ "%.0f"|format((s.cost_price or 0) * s.quantity) }}</td>
+                        <td>${{ "%.0f"|format(s.quantity * (s.price - (s.cost_price or 0)) + (s.delivery_fee|float or 0)) }}</td>
+                        <td><small>{{ s.imei or '' }}</small></td>
+                        <td><small class="text-muted">{{ s.created_by or '—' }}</small></td>
+                        <td><small class="text-muted">{{ s.timestamp[:10] }}</small></td>
+                        <td>
+                            {% if s.receipt_id %}<a href="{{ url_for('view_receipt', receipt_id=s.receipt_id) }}" class="btn btn-sm btn-outline-info" target="_blank"><i class="bi bi-receipt"></i></a>{% endif %}
+                            {% if s.returned %}<span class="badge bg-danger"><i class="bi bi-arrow-return-left"></i> Returned</span>
+                            {% else %}
+                            <button class="btn btn-sm btn-outline-primary btn-edit-sale" data-id="{{ s.id }}" data-price="{{ s.sellout_price or s.price }}" data-delivery="{{ s.delivery_fee or 0 }}" data-qty="{{ s.quantity }}" data-note="{{ s.special_note or '' }}"><i class="bi bi-pencil"></i></button>
+                            <button class="btn btn-sm btn-outline-danger btn-delete-sale" data-id="{{ s.id }}" data-item="{{ s.item_name }}"><i class="bi bi-trash"></i></button>
+                            <button class="btn btn-sm btn-outline-warning btn-return-sale" data-id="{{ s.id }}" data-item="{{ s.item_name }}"><i class="bi bi-arrow-return-left"></i></button>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="12" class="text-center text-muted py-4">No sales in this period</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="editSaleModal" tabindex="-1">
+    <div class="modal-dialog modal-sm"><div class="modal-content">
+        <form method="POST" id="editSaleForm">
+            <div class="modal-header"><h6>Edit Sale</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <div class="mb-2"><label class="form-label small">Sell Price</label><input type="number" name="price" id="esPrice" class="form-control" step="0.01" min="0" required></div>
+                <div class="mb-2"><label class="form-label small">Delivery Fee</label><input type="number" name="delivery" id="esDelivery" class="form-control" step="0.01" min="0"></div>
+                <div class="mb-2"><label class="form-label small">Quantity</label><input type="number" name="quantity" id="esQty" class="form-control" min="1" required></div>
+                <div class="mb-2"><label class="form-label small">Note</label><input type="text" name="note" id="esNote" class="form-control"></div>
+            </div>
+            <div class="modal-footer"><button type="submit" class="btn btn-primary btn-sm">Save</button></div>
+        </form>
+    </div></div>
+</div>
+
+<div class="modal fade" id="deleteSaleModal" tabindex="-1">
+    <div class="modal-dialog modal-sm"><div class="modal-content">
+        <div class="modal-header bg-danger text-white"><h6>Delete Sale</h6><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+            <p>Delete sale of <strong id="dsItem"></strong>?</p>
+            <p class="small text-muted">Stock will be restored to inventory. This action cannot be undone.</p>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <form method="POST" id="deleteSaleForm">
+                <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+            </form>
+        </div>
+    </div></div>
+</div>
+
+<div class="modal fade" id="returnSaleModal" tabindex="-1">
+    <div class="modal-dialog modal-sm"><div class="modal-content">
+        <div class="modal-header bg-warning text-dark"><h6>Return Sale</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <form method="POST" id="returnSaleForm">
+            <div class="modal-body">
+                <p>Return <strong id="rsItem"></strong> to inventory?</p>
+                <div class="mb-2"><label class="form-label small">Reason (optional)</label><input type="text" name="reason" class="form-control" placeholder="e.g. defective, customer changed mind"></div>
+                <p class="small text-muted">Stock will be restored and sale marked as returned.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-sm btn-warning"><i class="bi bi-arrow-return-left"></i> Return</button>
+            </div>
+        </form>
+    </div></div>
+</div>
+
+<script>
+document.querySelectorAll('.btn-edit-sale').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    document.getElementById('esPrice').value = this.dataset.price;
+    document.getElementById('esDelivery').value = this.dataset.delivery;
+    document.getElementById('esQty').value = this.dataset.qty;
+    document.getElementById('esNote').value = this.dataset.note;
+    document.getElementById('editSaleForm').action = '/sales/' + this.dataset.id + '/edit';
+    new bootstrap.Modal(document.getElementById('editSaleModal')).show();
+  });
+});
+document.querySelectorAll('.btn-delete-sale').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    document.getElementById('dsItem').textContent = this.dataset.item;
+    document.getElementById('deleteSaleForm').action = '/sales/' + this.dataset.id + '/delete';
+    new bootstrap.Modal(document.getElementById('deleteSaleModal')).show();
+  });
+});
+document.querySelectorAll('.btn-return-sale').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    document.getElementById('rsItem').textContent = this.dataset.item;
+    document.getElementById('returnSaleForm').action = '/sales/' + this.dataset.id + '/return';
+    new bootstrap.Modal(document.getElementById('returnSaleModal')).show();
+  });
+});
+</script>
+{% endblock %}

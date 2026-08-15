@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row">
+    <div class="col-md-4">
+        <div class="card stat-card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <h5><i class="bi bi-person-circle"></i> {{ customer.name }}</h5>
+                    <div class="d-flex gap-1">
+                        <a href="{{ url_for('customer_sellout_page', cust_id=customer.id) }}" class="btn btn-success btn-sm"><i class="bi bi-cart-plus"></i> Sellout</a>
+                        <a href="{{ url_for('customer_statement', cust_id=customer.id) }}" class="btn btn-outline-info btn-sm"><i class="bi bi-file-text"></i> Statement</a>
+                    </div>
+                </div>
+                <table class="table table-sm">
+                    <tr><td>Phone 1</td><td>{{ customer.phone or '—' }}</td></tr>
+                    <tr><td>Phone 2</td><td>{{ customer.phone2 or '—' }}</td></tr>
+                    <tr><td>Phone 3</td><td>{{ customer.phone3 or '—' }}</td></tr>
+                    <tr><td>Location</td><td>{{ customer.location or '—' }}</td></tr>
+                    <tr><td>Total Debt</td><td><strong class="text-danger">${{ "%.0f"|format(total_debt) }}</strong></td></tr>
+                </table>
+            </div>
+        </div>
+
+        <div class="card stat-card mt-3">
+            <div class="card-header bg-white"><strong><i class="bi bi-currency-dollar"></i> Transactions</strong></div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0">
+                        <thead><tr><th>Amount</th><th>Desc</th><th>Date</th></tr></thead>
+                        <tbody>
+                            {% for t in transactions %}
+                            <tr>
+                                <td><span class="text-{{ 'danger' if t.amount > 0 else 'success' }}">${{ "%.0f"|format(t.amount) }}</span></td>
+                                <td><small>{{ t.description or '' }}</small></td>
+                                <td><small class="text-muted">{{ t.timestamp[:10] }}</small></td>
+                            </tr>
+                            {% else %}
+                            <tr><td colspan="3" class="text-center text-muted py-2">No transactions</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-8">
+        <div class="card stat-card">
+            <div class="card-header bg-white"><strong><i class="bi bi-file-text"></i> Payment Schedules</strong></div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead><tr><th>ID</th><th>Due Date</th><th>Amount</th><th>Status</th><th>Notes</th></tr></thead>
+                        <tbody>
+                            {% for b in bills %}
+                            <tr class="{{ 'table-danger' if b.status == 'pending' and b.due_date < now.strftime('%Y-%m-%d') else '' }}">
+                                <td><small>{{ b.id }}</small></td>
+                                <td>{{ b.due_date }}</td>
+                                <td><strong>${{ "%.0f"|format(b.amount) }}</strong></td>
+                                <td>
+                                    <span class="badge bg-{{ 'success' if b.status == 'paid' else 'warning' if b.status == 'pending' else 'info' }}">
+                                        {{ b.status }}
+                                    </span>
+                                </td>
+                                <td><small class="text-muted">{{ b.notes or '' }}</small></td>
+                            </tr>
+                            {% else %}
+                            <tr><td colspan="5" class="text-center text-muted py-3">No bills</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="card stat-card mt-3">
+            <div class="card-header bg-white"><strong><i class="bi bi-cart"></i> Customer Purchases (Buy from Customer)</strong></div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead><tr><th>Item</th><th>Qty</th><th>Price Paid</th><th>Date</th><th>Note</th></tr></thead>
+                        <tbody>
+                            {% for b in buys %}
+                            <tr>
+                                <td>{{ b.item_name }}</td>
+                                <td>{{ b.quantity }}</td>
+                                <td>${{ "%.0f"|format(b.price_paid) if b.price_paid else '—' }}</td>
+                                <td><small>{{ b.sale_date or b.created_at[:10] }}</small></td>
+                                <td><small class="text-muted">{{ b.note or '' }}</small></td>
+                            </tr>
+                            {% else %}
+                            <tr><td colspan="5" class="text-center text-muted py-3">No purchases recorded</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

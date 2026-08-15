@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<title>Receipt {{ receipt.receipt_no }}</title>
+<style>
+  body { font-family: 'Courier New', monospace; font-size: 12px; width: 80mm; margin: auto; padding: 10px; }
+  h3 { margin: 0; }
+  .line { border-top: 1px dashed #000; margin: 8px 0; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { padding: 4px 2px; text-align: left; }
+  th { border-bottom: 1px solid #000; }
+  .text-end { text-align: right; }
+  .text-center { text-align: center; }
+  .fw-bold { font-weight: bold; }
+  @media print { @page { margin: 0; size: 80mm auto; } body { margin: 0; padding: 5mm; } }
+</style>
+</head><body>
+<div class="text-center">
+  <h3>Inventory Bot</h3>
+  <small>Receipt #{{ receipt.receipt_no }}</small><br>
+  <small>{{ receipt.created_at[:19] }}</small>
+</div>
+{% if receipt.customer_name %}
+<div><strong>Customer:</strong> {{ receipt.customer_name }}</div>
+{% endif %}
+<div class="line"></div>
+<table>
+  <thead><tr><th>Item</th><th class="text-center">Qty</th><th class="text-end">Price</th><th class="text-end">Total</th></tr></thead>
+  <tbody>
+    {% for item in items %}
+    <tr>
+      <td>{{ item.brand or '' }} {{ item.item_name }}</td>
+      <td class="text-center">{{ item.quantity }}</td>
+      <td class="text-end">${{ "%.2f"|format(item.sellout_price|float) if item.sellout_price else '-' }}</td>
+      <td class="text-end">${{ "%.2f"|format((item.sellout_price|float or 0) * item.quantity) }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+<div class="line"></div>
+<div class="text-end fw-bold">Total: ${{ "%.2f"|format(receipt.total_amount) }}</div>
+{% if receipt.discount and receipt.discount > 0 %}
+<div class="text-end">Discount: ${{ "%.2f"|format(receipt.discount) }}</div>
+{% endif %}
+<div class="line"></div>
+<div class="text-center small">Thank you for your business!</div>
+<script>window.print();</script>
+</body></html>

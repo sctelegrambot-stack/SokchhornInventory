@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
+    <h4 class="mb-2"><i class="bi bi-people"></i> {{ _d('title_customers') }}</h4>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('export_customers') }}" class="btn btn-sm btn-success"><i class="bi bi-file-earmark-excel"></i> {{ _d('excel') }}</a>
+        <a href="{{ url_for('export_bills') }}" class="btn btn-sm btn-outline-info"><i class="bi bi-receipt"></i> Export Bills</a>
+        <form method="GET" class="d-flex gap-2">
+            <input type="text" name="search" class="form-control form-control-sm" placeholder="{{ _d('search') }}" value="{{ search }}">
+            <button class="btn btn-sm btn-outline-primary"><i class="bi bi-search"></i></button>
+        </form>
+        <button class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#newCustomerModal"><i class="bi bi-plus-circle"></i> {{ _d('new') }}</button>
+    </div>
+</div>
+
+<div class="card stat-card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead><tr><th>{{ _d('name') }}</th><th>{{ _d('phone') }}</th><th>{{ _d('location') }}</th><th>{{ _d('debt') }}</th><th>{{ _d('bills') }}</th><th>{{ _d('actions') }}</th></tr></thead>
+                <tbody>
+                    {% for c in customers %}
+                    <tr>
+                        <td><strong>{{ c.name }}</strong></td>
+                        <td>{{ c.phone or '—' }}</td>
+                        <td><small>{{ c.location or '—' }}</small></td>
+                        <td><strong class="text-{{ 'danger' if c.total_debt > 0 else 'muted' }}">${{ "%.0f"|format(c.total_debt) }}</strong></td>
+                        <td><span class="badge bg-{{ 'warning' if c.pending_bills > 0 else 'secondary' }}">{{ c.pending_bills }}</span></td>
+                        <td>
+                            <a href="{{ url_for('customer_detail', cust_id=c.id) }}" class="btn btn-sm btn-outline-info"><i class="bi bi-eye"></i></a>
+                            <a href="{{ url_for('customer_sellout_page', cust_id=c.id) }}" class="btn btn-sm btn-outline-success"><i class="bi bi-cart-plus"></i></a>
+                            <button class="btn btn-sm btn-outline-primary btn-edit-customer" data-id="{{ c.id }}" data-name="{{ c.name }}" data-phone="{{ c.phone or '' }}" data-phone2="{{ c.phone2 or '' }}" data-phone3="{{ c.phone3 or '' }}" data-location="{{ c.location or '' }}"><i class="bi bi-pencil"></i></button>
+                            <button class="btn btn-sm btn-outline-danger btn-delete-customer" data-id="{{ c.id }}" data-name="{{ c.name }}"><i class="bi bi-trash"></i></button>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="6" class="text-center text-muted py-4">No customers</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="newCustomerModal" tabindex="-1">
+    <div class="modal-dialog modal-sm"><div class="modal-content">
+        <form method="POST" action="{{ url_for('create_customer') }}">
+            <div class="modal-header"><h6>New Customer</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <div class="mb-2"><label class="form-label small">Name *</label><input type="text" name="name" class="form-control" required></div>
+                <div class="mb-2"><label class="form-label small">Phone 1</label><input type="text" name="phone" class="form-control"></div>
+                <div class="mb-2"><label class="form-label small">Phone 2</label><input type="text" name="phone2" class="form-control"></div>
+                <div class="mb-2"><label class="form-label small">Phone 3</label><input type="text" name="phone3" class="form-control"></div>
+                <div class="mb-2"><label class="form-label small">Location</label><input type="text" name="location" class="form-control"></div>
+            </div>
+            <div class="modal-footer"><button type="submit" class="btn btn-success btn-sm">Create</button></div>
+        </form>
+    </div></div>
+</div>
+
+<div class="modal fade" id="editCustomerModal" tabindex="-1">
+    <div class="modal-dialog modal-sm"><div class="modal-content">
+        <form method="POST" id="editCustomerForm">
+            <div class="modal-header"><h6>Edit Customer</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <div class="mb-2"><label class="form-label small">Name *</label><input type="text" name="name" id="ecName" class="form-control" required></div>
+                <div class="mb-2"><label class="form-label small">Phone 1</label><input type="text" name="phone" id="ecPhone" class="form-control"></div>
+                <div class="mb-2"><label class="form-label small">Phone 2</label><input type="text" name="phone2" id="ecPhone2" class="form-control"></div>
+                <div class="mb-2"><label class="form-label small">Phone 3</label><input type="text" name="phone3" id="ecPhone3" class="form-control"></div>
+                <div class="mb-2"><label class="form-label small">Location</label><input type="text" name="location" id="ecLocation" class="form-control"></div>
+            </div>
+            <div class="modal-footer"><button type="submit" class="btn btn-primary btn-sm">Save</button></div>
+        </form>
+    </div></div>
+</div>
+
+<div class="modal fade" id="deleteCustomerModal" tabindex="-1">
+    <div class="modal-dialog modal-sm"><div class="modal-content">
+        <div class="modal-header bg-danger text-white"><h6>Delete Customer</h6><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+            <p>Delete <strong id="dcName"></strong>?</p>
+            <p class="small text-muted">This will also remove all bills and transactions.</p>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <form method="POST" id="deleteCustomerForm">
+                <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+            </form>
+        </div>
+    </div></div>
+</div>
+
+<script>
+document.querySelectorAll('.btn-edit-customer').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    document.getElementById('ecName').value = this.dataset.name;
+    document.getElementById('ecPhone').value = this.dataset.phone;
+    document.getElementById('ecPhone2').value = this.dataset.phone2;
+    document.getElementById('ecPhone3').value = this.dataset.phone3;
+    document.getElementById('ecLocation').value = this.dataset.location;
+    document.getElementById('editCustomerForm').action = '/customers/' + this.dataset.id + '/edit';
+    new bootstrap.Modal(document.getElementById('editCustomerModal')).show();
+  });
+});
+document.querySelectorAll('.btn-delete-customer').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    document.getElementById('dcName').textContent = this.dataset.name;
+    document.getElementById('deleteCustomerForm').action = '/customers/' + this.dataset.id + '/delete';
+    new bootstrap.Modal(document.getElementById('deleteCustomerModal')).show();
+  });
+});
+</script>
+{% endblock %}

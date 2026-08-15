@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4><i class="bi bi-collection"></i> {{ _d('title_categories') }}</h4>
+    <div class="d-flex gap-2">
+        <button class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#newCatModal"><i class="bi bi-plus-circle"></i> {{ _d('new') }} Category</button>
+    </div>
+</div>
+
+<div class="row g-3">
+    {% for cat in categories %}
+    <div class="col-md-6 col-lg-4">
+        <div class="card stat-card h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h5 class="mb-1">{{ cat.emoji }} <a href="{{ url_for('category_products', group_id=cat.id) }}" class="text-decoration-none stretched-link">{{ cat.name }}</a></h5>
+                        <span class="badge bg-primary">{{ cat.item_count }} {{ _d('items_count') }}</span>
+                    </div>
+                    <form method="POST" action="{{ url_for('delete_category', group_id=cat.id) }}" onsubmit="return confirm('Delete category {{ cat.name }} and unlink its items?')">
+                        <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+                    </form>
+                </div>
+                <div class="mt-2 small text-muted">
+                    <i class="bi bi-box"></i> {{ _d('group') }}: {{ cat.color }} {{ cat.name }}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="col-12">
+        <div class="card stat-card">
+            <div class="card-body text-center py-5 text-muted">
+                <i class="bi bi-collection" style="font-size:3rem"></i>
+                <p class="mt-3">No categories yet. Create your first category to organize products.</p>
+                <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#newCatModal"><i class="bi bi-plus-circle"></i> Create Category</button>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<div class="modal fade" id="newCatModal" tabindex="-1">
+    <div class="modal-dialog modal-sm"><div class="modal-content">
+        <form method="POST" action="{{ url_for('create_category') }}">
+            <div class="modal-header"><h6>New Category</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <div class="mb-2"><label class="form-label small">{{ _d('name') }}</label><input type="text" name="name" class="form-control" required></div>
+                <div class="mb-2"><label class="form-label small">Emoji</label><input type="text" name="emoji" class="form-control" value="📂"></div>
+                <div class="mb-2"><label class="form-label small">Color</label><input type="text" name="color" class="form-control" value="🔵"></div>
+            </div>
+            <div class="modal-footer"><button type="submit" class="btn btn-success btn-sm">{{ _d('new') }} {{ _d('category') }}</button></div>
+        </form>
+    </div></div>
+</div>
+{% endblock %}

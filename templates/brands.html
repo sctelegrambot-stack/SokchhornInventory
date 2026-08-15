@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4><i class="bi bi-tags"></i> {{ _d('title_brands') }}</h4>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('export_brands') }}" class="btn btn-sm btn-success"><i class="bi bi-file-earmark-excel"></i> {{ _d('excel') }}</a>
+        <button class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#newBrandModal"><i class="bi bi-plus-circle"></i> {{ _d('new') }} Brand</button>
+    </div>
+</div>
+
+<div class="card stat-card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead><tr><th>Emoji</th><th>Name</th><th>Color</th><th>Items</th><th></th></tr></thead>
+                <tbody>
+                    {% for b in brands %}
+                    <tr>
+                        <td style="font-size:1.3rem">{{ b.emoji }}</td>
+                        <td><strong>{{ b.name }}</strong></td>
+                        <td><span class="badge bg-secondary">{{ b.color }}</span></td>
+                        <td><span class="badge bg-primary">{{ b.item_count }}</span></td>
+                        <td>
+                            <form method="POST" action="{{ url_for('delete_brand', brand_id=b.id) }}" class="d-inline" onsubmit="return confirm('Delete brand {{ b.name }}?')">
+                                <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="5" class="text-center text-muted py-3">No brands</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="newBrandModal" tabindex="-1">
+    <div class="modal-dialog modal-sm"><div class="modal-content">
+        <form method="POST" action="{{ url_for('create_brand') }}">
+            <div class="modal-header"><h6>New Brand</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <div class="mb-2"><label class="form-label small">Name</label><input type="text" name="name" class="form-control" required></div>
+                <div class="mb-2"><label class="form-label small">Emoji</label><input type="text" name="emoji" class="form-control" value="📦"></div>
+                <div class="mb-2"><label class="form-label small">Color Indicator</label><input type="text" name="color" class="form-control" value="⚪"></div>
+            </div>
+            <div class="modal-footer"><button type="submit" class="btn btn-success btn-sm">Create</button></div>
+        </form>
+    </div></div>
+</div>
+{% endblock %}

@@ -1,0 +1,253 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+#scanInput { font-size:24px; height:60px; text-align:center; letter-spacing:3px; border:2px solid #0d6efd; border-radius:12px; }
+#scanInput:focus { box-shadow:0 0 0 4px rgba(13,110,253,.2); outline:none; }
+.cart-item { background:#fff; border:1px solid #dee2e6; border-radius:10px; padding:12px 16px; margin-bottom:8px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+.cart-item .item-info { flex:1; min-width:140px; }
+.cart-item .item-info strong { font-size:15px; }
+.cart-item .item-info small { color:#6c757d; }
+.cart-item input[type=number] { width:90px; }
+.cart-item .remove-btn { color:#dc3545; cursor:pointer; font-size:20px; line-height:1; padding:0 6px; }
+.sellout-total { background:#198754; color:#fff; border-radius:12px; padding:16px 24px; display:flex; justify-content:space-between; align-items:center; font-size:20px; font-weight:700; }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0"><i class="bi bi-cart-plus"></i> Quick Sellout</h4>
+  <a href="{{ url_for('dashboard') }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left"></i> Back</a>
+</div>
+
+<div class="card stat-card mb-3 border-primary">
+  <div class="card-body py-3">
+    <div class="row g-2 align-items-end">
+      <div class="col-md-5">
+        <label class="form-label small fw-bold"><i class="bi bi-tag"></i> Brand</label>
+        <select id="brandSelect" class="form-select">
+          <option value="">All Brands</option>
+          {% for b in brands %}
+          <option value="{{ b }}">{{ b }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-5">
+        <label class="form-label small fw-bold"><i class="bi bi-box"></i> Product</label>
+        <select id="productSelect" class="form-select">
+          <option value="">-- Select Product --</option>
+          {% for p in products %}
+          <option value="{{ p.id }}" data-brand="{{ p.category }}" data-price="{{ p.price or 0 }}" data-name="{{ p.name }}">{{ p.name }} (${{ "%.0f"|format(p.price or 0) }})</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <button id="addProductBtn" class="btn btn-primary w-100"><i class="bi bi-plus-lg"></i> Add</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card stat-card mb-3">
+  <div class="card-body">
+    <form id="scanForm" method="POST">
+      <input type="text" id="scanInput" class="form-control" placeholder="Scan or type IMEI / product code..." autofocus autocomplete="off">
+    </form>
+    <div id="scanFeedback" class="mt-2 small"></div>
+  </div>
+</div>
+
+<div id="cartContainer">
+  <div class="text-muted text-center py-4" id="emptyCart">
+    <i class="bi bi-inbox" style="font-size:40px;display:block;margin-bottom:8px;"></i>
+    Scan items to add to cart
+  </div>
+</div>
+
+<div id="totalBar" class="sellout-total mt-3" style="display:none;">
+  <span>Total: <span id="grandTotal">$0.00</span></span>
+  <span>Items: <span id="itemCount">0</span></span>
+</div>
+
+<button id="completeBtn" class="btn btn-success btn-lg w-100 mt-3" style="display:none;" onclick="completeSale()">
+  <i class="bi bi-check-lg"></i> Complete Sale
+</button>
+
+<script>
+let cart = [];
+let scanBuffer = '';
+let scanTimer = null;
+let allProducts = [
+  {% for p in products %}
+  {id: {{ p.id }}, name: '{{ p.name|replace("'","\\'") }}', brand: '{{ p.category|replace("'","\\'") }}', price: {{ p.price or 0 }}}{% if not loop.last %},{% endif %}
+  {% endfor %}
+];
+
+document.getElementById('brandSelect').addEventListener('change', function() {
+  var sel = document.getElementById('productSelect');
+  var brand = this.value;
+  for (var i = 0; i < sel.options.length; i++) {
+    var opt = sel.options[i];
+    if (opt.value === '') continue;
+    opt.style.display = (brand === '' || opt.dataset.brand === brand) ? '' : 'none';
+  }
+  sel.value = '';
+});
+
+document.getElementById('addProductBtn').addEventListener('click', function() {
+  var sel = document.getElementById('productSelect');
+  if (!sel.value) return;
+  var opt = sel.options[sel.selectedIndex];
+  addToCart({
+    id: parseInt(sel.value),
+    name: opt.dataset.name,
+    brand: opt.dataset.brand,
+    price: parseFloat(opt.dataset.price) || 0,
+    brand_emoji: '', cost: 0, group: ''
+  }, '');
+  sel.value = '';
+  document.getElementById('scanInput').focus();
+});
+
+document.getElementById('scanInput').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    doScan(this.value.trim());
+    this.value = '';
+  }
+});
+
+function doScan(code) {
+  if (!code) return;
+  var fb = document.getElementById('scanFeedback');
+  fb.innerHTML = '<span class="text-muted">Scanning...</span>';
+  var form = new FormData();
+  form.append('code', code);
+  fetch('/sellout/scan', { method:'POST', body:form, headers:{'X-Requested-With':'XMLHttpRequest'} })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.ok) { fb.innerHTML = '<span class="text-danger">'+d.msg+'</span>'; return; }
+      fb.innerHTML = '<span class="text-success">Found!</span>';
+      if (d.multiple) {
+        showMultipleChoices(d.choices, d.code);
+        return;
+      }
+      addToCart(d.item, d.imei || '');
+      document.getElementById('scanInput').focus();
+    })
+    .catch(function() { fb.innerHTML = '<span class="text-danger">Error scanning</span>'; });
+}
+
+function showMultipleChoices(choices, code) {
+  var lines = ['<div class="alert alert-info p-2 mb-2"><small>Multiple items for code <strong>'+code+'</strong>:</small></div>'];
+  choices.forEach(function(c) {
+    lines.push('<button class="btn btn-outline-primary btn-sm me-1 mb-1" onclick="addFromChoice('+c.id+',\''+c.name+'\',\''+c.brand+'\','+(c.price||0)+')">'+c.brand+' '+c.name+' ($'+(c.price||0)+')</button>');
+  });
+  document.getElementById('scanFeedback').innerHTML = lines.join('');
+}
+
+function addFromChoice(id, name, brand, price) {
+  addToCart({id:id, name:name, brand:brand, price:price, cost:0, brand_emoji:'', group:''}, '');
+  document.getElementById('scanFeedback').innerHTML = '';
+  document.getElementById('scanInput').focus();
+}
+
+function addToCart(item, imei) {
+  var existing = cart.findIndex(function(c) { return c.id === item.id && c.imei === imei; });
+  if (existing >= 0) {
+    cart[existing].qty += 1;
+    document.getElementById('scanFeedback').innerHTML = '<span class="text-success">+1 ' + cart[existing].name + ' (total: ' + cart[existing].qty + ')</span>';
+    renderCart();
+    return;
+  }
+  cart.unshift({
+    id: item.id, name: item.name, brand: item.brand, brand_emoji: item.brand_emoji,
+    price: item.price || 0, cost: item.cost || 0, imei: imei,
+    sellPrice: item.price || 0, delivery: 0, note: '', qty: 1
+  });
+  renderCart();
+}
+
+function removeFromCart(idx) {
+  cart.splice(idx, 1);
+  renderCart();
+}
+
+function updateCartField(idx, field, value) {
+  if (cart[idx]) {
+    if (field === 'qty') {
+      cart[idx][field] = Math.max(1, parseInt(value) || 1);
+    } else {
+      cart[idx][field] = parseFloat(value) || 0;
+    }
+  }
+  updateTotal();
+}
+
+function renderCart() {
+  var container = document.getElementById('cartContainer');
+  var empty = document.getElementById('emptyCart');
+  var totalBar = document.getElementById('totalBar');
+  var completeBtn = document.getElementById('completeBtn');
+  if (!cart.length) {
+    empty.style.display = '';
+    container.innerHTML = '<div class="text-muted text-center py-4" id="emptyCart"><i class="bi bi-inbox" style="font-size:40px;display:block;margin-bottom:8px;"></i>Scan items to add to cart</div>';
+    totalBar.style.display = 'none';
+    completeBtn.style.display = 'none';
+    return;
+  }
+  empty.style.display = 'none';
+  totalBar.style.display = '';
+  completeBtn.style.display = '';
+  var html = '';
+  cart.forEach(function(c, i) {
+    html += '<div class="cart-item">';
+    html += '<span class="remove-btn" onclick="removeFromCart('+i+')">&times;</span>';
+    html += '<div class="item-info"><strong>'+c.brand_emoji+' '+c.brand+' '+c.name+'</strong>';
+    if (c.imei) html += '<br><small>IMEI: '+c.imei+'</small>';
+    html += '<br><small>Retail: $'+(c.price.toFixed(2)||'0.00')+'</small></div>';
+    html += '<label class="small mb-0">Qty <input type="number" class="form-control form-control-sm" value="'+c.qty+'" min="1" step="1" onchange="updateCartField('+i+',\'qty\',Math.max(1,parseInt(this.value)||1))" onfocus="this.select()" style="width:70px"></label>';
+    html += '<label class="small mb-0">Price <input type="number" class="form-control form-control-sm" value="'+c.sellPrice.toFixed(2)+'" min="0" step="0.01" onchange="updateCartField('+i+',\'sellPrice\',this.value)" onfocus="this.select()"></label>';
+    html += '<label class="small mb-0">Delivery <input type="number" class="form-control form-control-sm" value="'+c.delivery.toFixed(2)+'" min="0" step="0.01" onchange="updateCartField('+i+',\'delivery\',this.value)" onfocus="this.select()"></label>';
+    html += '<span class="badge bg-primary">$'+((c.sellPrice + c.delivery) * c.qty).toFixed(2)+'</span>';
+    html += '</div>';
+  });
+  container.innerHTML = html;
+  updateTotal();
+}
+
+function updateTotal() {
+  var total = 0, count = 0;
+  cart.forEach(function(c) { total += (c.sellPrice + c.delivery) * c.qty; count += c.qty; });
+  document.getElementById('grandTotal').textContent = '$'+total.toFixed(2);
+  document.getElementById('itemCount').textContent = count;
+}
+
+function completeSale() {
+  if (!cart.length) { alert('Cart is empty'); return; }
+  var totalQty = cart.reduce(function(s,c){return s+c.qty;},0);
+  if (!confirm('Complete sale for '+totalQty+' item(s)?')) return;
+  var btn = document.getElementById('completeBtn');
+  btn.disabled = true; btn.innerHTML = 'Processing...';
+  fetch('/sellout/complete', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({cart: cart})
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    if (d.ok) {
+      cart = [];
+      renderCart();
+      if (d.receipt_id) {
+        window.location.href = '/receipt/' + d.receipt_id;
+      } else {
+        alert(d.msg);
+        document.getElementById('scanInput').focus();
+      }
+    } else {
+      alert('Error: '+d.msg);
+    }
+  })
+  .catch(function() { alert('Failed to complete sale'); })
+  .finally(function() { btn.disabled = false; btn.innerHTML = '<i class="bi bi-check-lg"></i> Complete Sale'; });
+}
+</script>
+{% endblock %}

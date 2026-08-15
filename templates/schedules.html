@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
+    <h4 class="mb-2"><i class="bi bi-calendar-check"></i> {{ _d('title_payments') }}</h4>
+    <div class="d-flex gap-2 align-items-center">
+        <a href="{{ url_for('export_schedules', status=status) }}" class="btn btn-sm btn-success"><i class="bi bi-file-earmark-excel"></i> {{ _d('excel') }}</a>
+        <form method="GET">
+        <select name="status" class="form-select form-select-sm" style="width:auto" onchange="this.form.submit()">
+            <option value="all" {% if status == 'all' %}selected{% endif %}>All</option>
+            <option value="pending" {% if status == 'pending' %}selected{% endif %}>Pending</option>
+            <option value="partial" {% if status == 'partial' %}selected{% endif %}>Partial</option>
+            <option value="paid" {% if status == 'paid' %}selected{% endif %}>Paid</option>
+        </select>
+    </form>
+    </div>
+</div>
+
+<div class="card stat-card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead><tr><th>{{ _d('customer') }}</th><th>{{ _d('due') }}</th><th>{{ _d('amount') }}</th><th>{{ _d('status') }}</th><th>{{ _d('note') if false else 'Notes' }}</th><th></th></tr></thead>
+                <tbody>
+                    {% for s in schedules %}
+                    <tr class="{{ 'table-danger' if s.status in ('pending','partial') and s.due_date < now.strftime('%Y-%m-%d') else '' }}">
+                        <td><strong>{{ s.customer_name }}</strong><br><small class="text-muted">{{ s.phone or '' }}</small></td>
+                        <td>{{ s.due_date }}</td>
+                        <td><strong>${{ "%.0f"|format(s.amount) }}</strong></td>
+                        <td>
+                            <span class="badge bg-{{ 'success' if s.status == 'paid' else 'warning' if s.status == 'pending' else 'info' }}">
+                                {{ s.status }}
+                            </span>
+                        </td>
+                        <td><small class="text-muted">{{ s.notes or '' }}</small></td>
+                        <td>
+                            {% if s.status != 'paid' %}
+                            <form method="POST" action="{{ url_for('mark_paid') }}" class="d-inline">
+                                <input type="hidden" name="schedule_id" value="{{ s.id }}">
+                                <button class="btn btn-sm btn-success" onclick="return confirm('Mark as paid?')"><i class="bi bi-check-lg"></i></button>
+                            </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="6" class="text-center text-muted py-4">No schedules found</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

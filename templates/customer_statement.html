@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 no-print">
+  <h4><i class="bi bi-file-text"></i> Customer Statement</h4>
+  <button class="btn btn-primary" onclick="window.print()"><i class="bi bi-printer"></i> Print</button>
+</div>
+
+<div class="card stat-card">
+  <div class="card-body">
+    <div class="row mb-4">
+      <div class="col-6">
+        <h5>{{ customer.name }}</h5>
+        <p class="mb-1">{{ customer.phone or '' }}{% if customer.phone2 %} / {{ customer.phone2 }}{% endif %}</p>
+        <p class="text-muted">{{ customer.location or '' }}</p>
+      </div>
+      <div class="col-6 text-end">
+        <p class="mb-1"><strong>Date:</strong> {{ now.strftime('%Y-%m-%d') }}</p>
+        <p class="mb-1"><strong>Outstanding Debt:</strong> <span class="text-danger fs-5">${{ "%.2f"|format(total_debt) }}</span></p>
+      </div>
+    </div>
+
+    <h6 class="border-bottom pb-2"><i class="bi bi-cart"></i> Purchases</h6>
+    <table class="table table-sm">
+      <thead><tr><th>Date</th><th>Item</th><th>Brand</th><th>Qty</th><th>Price</th></tr></thead>
+      <tbody>
+        {% for b in buys %}
+        <tr>
+          <td><small>{{ b.sale_date or b.created_at[:10] }}</small></td>
+          <td>{{ b.item_name }}</td>
+          <td><small>{{ b.brand }}</small></td>
+          <td>{{ b.quantity }}</td>
+          <td>${{ "%.2f"|format(b.price_paid or 0) }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="text-muted">No purchases</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <h6 class="border-bottom pb-2 mt-4"><i class="bi bi-calendar-check"></i> Payment Schedule</h6>
+    <table class="table table-sm">
+      <thead><tr><th>Due Date</th><th>Amount</th><th>Status</th><th>Notes</th></tr></thead>
+      <tbody>
+        {% for b in bills %}
+        <tr>
+          <td>{{ b.due_date }}</td>
+          <td>${{ "%.2f"|format(b.amount) }}</td>
+          <td><span class="badge bg-{{ 'success' if b.status == 'paid' else 'warning' if b.status == 'pending' else 'info' }}">{{ b.status }}</span></td>
+          <td><small>{{ b.notes or '' }}</small></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" class="text-muted">No payment schedules</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <h6 class="border-bottom pb-2 mt-4"><i class="bi bi-arrow-left-right"></i> Transaction History</h6>
+    <table class="table table-sm">
+      <thead><tr><th>Date</th><th>Description</th><th class="text-end">Amount</th><th class="text-end">Running Balance</th></tr></thead>
+      <tbody>
+        {% set ns = namespace(rb=0.0) %}
+        {% for t in transactions %}
+        {% set ns.rb = ns.rb + (t.amount or 0) %}
+        <tr>
+          <td><small>{{ t.timestamp[:10] }}</small></td>
+          <td>{{ t.description or '' }}</td>
+          <td class="text-end"><span class="text-{{ 'danger' if t.amount > 0 else 'success' }}">{{ '%+.2f'|format(t.amount) }}</span></td>
+          <td class="text-end">${{ "%.2f"|format(ns.rb) }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" class="text-muted">No transactions</td></tr>
+        {% endfor %}
+      </tbody>
+      <tfoot><tr class="fw-bold"><td colspan="3" class="text-end">Outstanding Balance</td><td class="text-end text-danger">${{ "%.2f"|format(total_debt) }}</td></tr></tfoot>
+    </table>
+  </div>
+</div>
+
+<style media="print">
+  @page { margin: 15mm; size: A4 portrait; }
+  .no-print, nav, .sidebar, .navbar, footer, .btn { display: none !important; }
+  .card { border: none !important; box-shadow: none !important; }
+  body { font-size: 11pt; }
+  .container, .row, .col, .col-6, .col-12 { max-width: 100% !important; }
+</style>
+{% endblock %}

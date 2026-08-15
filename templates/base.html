@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="{{ 'dark' if session.get('theme') == 'dark' else 'light' }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inventory Bot Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.2/font/bootstrap-icons.min.css">
+    <style>
+        :root {
+            --body-bg: #f5f6fa; --text-color: #212529; --text-muted: #6c757d;
+            --sidebar-bg: #2c3e50; --sidebar-text: rgba(255,255,255,.7); --sidebar-hover: rgba(255,255,255,.1);
+            --card-bg: #fff; --card-border: none; --card-shadow: 0 2px 8px rgba(0,0,0,.05);
+            --table-hover: rgba(0,0,0,.02); --input-bg: #fff; --input-border: #dee2e6;
+            --link-color: #0d6efd; --navbar-bg: #fff;
+            --sidebar-brand-bg: transparent; --offcanvas-bg: #fff;
+        }
+        [data-theme="dark"] {
+            --body-bg: #1a1d23; --text-color: #e0e0e0; --text-muted: #999;
+            --sidebar-bg: #111318; --sidebar-text: rgba(255,255,255,.6); --sidebar-hover: rgba(255,255,255,.08);
+            --card-bg: #282c34; --card-border: 1px solid #3a3f48; --card-shadow: 0 2px 8px rgba(0,0,0,.2);
+            --table-hover: rgba(255,255,255,.03); --input-bg: #2d3039; --input-border: #3a3f48;
+            --link-color: #6ea8fe; --navbar-bg: #282c34;
+            --sidebar-brand-bg: rgba(255,255,255,.03); --offcanvas-bg: #282c34;
+        }
+        body { background: var(--body-bg); color: var(--text-color); font-size: .9rem; }
+        a { color: var(--link-color); }
+        .sidebar { background: var(--sidebar-bg); min-height: 100vh; }
+        .sidebar .nav-link { color: var(--sidebar-text); padding: .6rem 1rem; border-radius: .3rem; margin: .15rem .5rem; }
+        .sidebar .nav-link:hover, .sidebar .nav-link.active { color: #fff; background: var(--sidebar-hover); }
+        .sidebar .nav-link i { width: 1.5rem; }
+        .sidebar .brand { color: #fff; padding: 1.2rem 1rem; font-size: 1.1rem; border-bottom: 1px solid rgba(255,255,255,.1); background: var(--sidebar-brand-bg); }
+        .stat-card { background: var(--card-bg); border: var(--card-border); border-radius: .75rem; box-shadow: var(--card-shadow); transition: transform .15s; }
+        .stat-card:hover { transform: translateY(-2px); }
+        .stat-card .icon { font-size: 2rem; opacity: .2; position: absolute; right: 1rem; top: 1rem; }
+        .stat-card .stat-value { font-size: 1.6rem; font-weight: 700; }
+        .stat-card .stat-label { font-size: .8rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: .5px; }
+        .stat-card { position: relative; overflow: hidden; }
+        .table { --bs-table-bg: transparent; --bs-table-color: var(--text-color); }
+        .table th { font-weight: 600; font-size: .8rem; text-transform: uppercase; letter-spacing: .3px; color: var(--text-muted); }
+        .table td { vertical-align: middle; }
+        .table-hover tbody tr:hover { background: var(--table-hover); }
+        .search-box { max-width: 300px; }
+        .content { padding: 1.5rem; }
+        .form-control, .form-select { background: var(--input-bg); border-color: var(--input-border); color: var(--text-color); }
+        .form-control:focus, .form-select:focus { background: var(--input-bg); color: var(--text-color); }
+        .form-control::placeholder { color: var(--text-muted); }
+        .navbar, .navbar-light { background: var(--navbar-bg) !important; }
+        .offcanvas, .offcanvas-start, .offcanvas-end, .offcanvas-top, .offcanvas-bottom { background: var(--offcanvas-bg); color: var(--text-color); }
+        .offcanvas .nav-link { color: var(--text-color); }
+        .offcanvas .nav-link:hover { background: var(--table-hover); }
+        .table-dark { --bs-table-bg: var(--card-bg); --bs-table-color: var(--text-color); --bs-table-border-color: var(--input-border); }
+        .card { background: var(--card-bg); color: var(--text-color); border: var(--card-border); }
+        .modal-content { background: var(--card-bg); color: var(--text-color); }
+        .list-group-item { background: var(--card-bg); color: var(--text-color); border-color: var(--input-border); }
+        .page-link { background: var(--card-bg); color: var(--text-color); border-color: var(--input-border); }
+        .page-item.active .page-link { background: var(--link-color); border-color: var(--link-color); }
+        .alert { background: var(--card-bg); }
+        hr { border-color: var(--input-border); }
+        @media (max-width: 768px) { .sidebar { min-height: auto; } }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-md-2 sidebar p-0 d-none d-md-block">
+                <div class="brand"><i class="bi bi-box-seam me-2"></i>Inventory Bot</div>
+                <nav class="nav flex-column mt-2">
+                    <a class="nav-link {% if request.path == '/dashboard' or request.path == '/' %}active{% endif %}" href="{{ url_for('dashboard') }}"><i class="bi bi-speedometer2"></i> {{ _d('nav_dashboard') }}</a>
+                    <div class="nav-link small text-uppercase text-white-50 fw-bold" style="padding:.3rem 1rem;font-size:.7rem;margin-top:4px;">{{ _d('sellout') }}</div>
+                    <a class="nav-link {% if request.path == '/sellout' %}active{% endif %}" href="{{ url_for('sellout_page') }}"><i class="bi bi-cart-plus"></i> {{ _d('sellout') }}</a>
+                    <a class="nav-link {% if 'wholesale' in request.path %}active{% endif %}" href="{{ url_for('wholesale_sellout') }}"><i class="bi bi-cart-check"></i> Wholesale Sellout</a>
+                    <div class="nav-link small text-uppercase text-white-50 fw-bold" style="padding:.3rem 1rem;font-size:.7rem;margin-top:4px;">{{ _d('nav_inventory') }}</div>
+                    <a class="nav-link {% if 'inventory' in request.path and 'barcode' not in request.path %}active{% endif %}" href="{{ url_for('inventory') }}"><i class="bi bi-box"></i> {{ _d('title_inventory') }}</a>
+                    <a class="nav-link {% if 'categories' in request.path %}active{% endif %}" href="{{ url_for('categories') }}"><i class="bi bi-collection"></i> {{ _d('nav_categories') }}</a>
+                    <a class="nav-link {% if 'barcode' in request.path %}active{% endif %}" href="{{ url_for('barcode_designer') }}"><i class="bi bi-upc-scan"></i> Print Barcode</a>
+                    <div class="nav-link small text-uppercase text-white-50 fw-bold" style="padding:.3rem 1rem;font-size:.7rem;margin-top:4px;"><i class="bi bi-file-text"></i> Reports</div>
+                    <a class="nav-link {% if 'sales' in request.path %}active{% endif %}" href="{{ url_for('sales') }}"><i class="bi bi-receipt"></i> Bill Management</a>
+                    <a class="nav-link {% if 'returns' in request.path %}active{% endif %}" href="{{ url_for('returns') }}"><i class="bi bi-arrow-return-left"></i> Returns</a>
+                    <a class="nav-link {% if 'receipts' in request.path %}active{% endif %}" href="{{ url_for('receipts_list') }}"><i class="bi bi-receipt-cutoff"></i> Receipts</a>
+                    <a class="nav-link {% if 'schedules' in request.path %}active{% endif %}" href="{{ url_for('schedules') }}"><i class="bi bi-calendar-check"></i> {{ _d('nav_payments') }}</a>
+                    <a class="nav-link {% if 'stock-movements' in request.path %}active{% endif %}" href="{{ url_for('stock_movements') }}"><i class="bi bi-arrow-left-right"></i> Stock Log</a>
+                    <a class="nav-link {% if 'exports' in request.path %}active{% endif %}" href="{{ url_for('exports_list') }}"><i class="bi bi-file-earmark-bar-graph"></i> Export Report</a>
+                    <div class="nav-link small text-uppercase text-white-50 fw-bold" style="padding:.3rem 1rem;font-size:.7rem;margin-top:4px;">{{ _d('nav_customers') }}</div>
+                    <a class="nav-link {% if 'customers' in request.path %}active{% endif %}" href="{{ url_for('customers') }}"><i class="bi bi-people"></i> {{ _d('nav_customers') }}</a>
+                    <hr style="border-color:rgba(255,255,255,.1)">
+                    <form method="POST" action="{{ url_for('set_staff') }}" class="px-3 py-1">
+                        <label class="small text-white-50"><i class="bi bi-person-badge"></i> Active Staff</label>
+                        <div class="input-group input-group-sm mt-1">
+                            <select name="staff_name" class="form-select form-select-sm" onchange="this.form.submit()">
+                                <option value="">— None —</option>
+                                {% for s in staff_list %}
+                                <option value="{{ s.name }}" {% if staff_name() == s.name %}selected{% endif %}>{{ s.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </form>
+                    <hr style="border-color:rgba(255,255,255,.1)">
+                    <a class="nav-link {% if 'settings' in request.path %}active{% endif %}" href="{{ url_for('settings') }}"><i class="bi bi-gear"></i> {{ _d('nav_settings') }}</a>
+                    <a class="nav-link" href="{{ url_for('set_lang', code='en') }}">🇬🇧 EN</a>
+                    <a class="nav-link" href="{{ url_for('set_lang', code='km') }}">🇰🇭 ខ្មែរ</a>
+                    <a class="nav-link" href="#" onclick="toggleTheme();return false"><i class="bi bi-moon-stars"></i> <span class="theme-label">Dark</span></a>
+                    <a class="nav-link text-danger" href="{{ url_for('logout') }}"><i class="bi bi-box-arrow-right"></i> {{ _d('nav_logout') }}</a>
+                </nav>
+            </div>
+            <div class="col-md-10 ms-auto content">
+                <nav class="navbar navbar-light d-md-none mb-3">
+                    <div class="container-fluid">
+                        <span class="navbar-brand"><i class="bi bi-box-seam me-2"></i>Inventory Bot</span>
+                        <button class="btn btn-outline-secondary" type="button" data-bs-toggle="offcanvas" data-bs-target="#mobileMenu"><i class="bi bi-list"></i></button>
+                    </div>
+                </nav>
+                <div class="offcanvas offcanvas-start" id="mobileMenu">
+                    <div class="offcanvas-header"><h5>Menu</h5><button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button></div>
+                    <div class="offcanvas-body">
+                        <nav class="nav flex-column">
+                            <a class="nav-link" href="{{ url_for('dashboard') }}"><i class="bi bi-speedometer2"></i> {{ _d('nav_dashboard') }}</a>
+                            <div class="fw-bold small text-muted text-uppercase mt-2 mb-1">{{ _d('sellout') }}</div>
+                            <a class="nav-link" href="{{ url_for('sellout_page') }}"><i class="bi bi-cart-plus"></i> {{ _d('sellout') }}</a>
+                            <a class="nav-link" href="{{ url_for('wholesale_sellout') }}"><i class="bi bi-cart-check"></i> Wholesale Sellout</a>
+                            <div class="fw-bold small text-muted text-uppercase mt-2 mb-1">{{ _d('nav_inventory') }}</div>
+                            <a class="nav-link" href="{{ url_for('inventory') }}"><i class="bi bi-box"></i> {{ _d('title_inventory') }}</a>
+                            <a class="nav-link" href="{{ url_for('categories') }}"><i class="bi bi-collection"></i> {{ _d('nav_categories') }}</a>
+                            <a class="nav-link" href="{{ url_for('barcode_designer') }}"><i class="bi bi-upc-scan"></i> Print Barcode</a>
+                            <div class="fw-bold small text-muted text-uppercase mt-2 mb-1"><i class="bi bi-file-text"></i> Reports</div>
+                            <a class="nav-link" href="{{ url_for('sales') }}"><i class="bi bi-receipt"></i> Bill Management</a>
+                            <a class="nav-link" href="{{ url_for('returns') }}"><i class="bi bi-arrow-return-left"></i> Returns</a>
+                            <a class="nav-link" href="{{ url_for('receipts_list') }}"><i class="bi bi-receipt-cutoff"></i> Receipts</a>
+                            <a class="nav-link" href="{{ url_for('schedules') }}"><i class="bi bi-calendar-check"></i> {{ _d('nav_payments') }}</a>
+                            <a class="nav-link" href="{{ url_for('stock_movements') }}"><i class="bi bi-arrow-left-right"></i> Stock Log</a>
+                            <a class="nav-link" href="{{ url_for('exports_list') }}"><i class="bi bi-file-earmark-bar-graph"></i> Export Report</a>
+                            <div class="fw-bold small text-muted text-uppercase mt-2 mb-1">{{ _d('nav_customers') }}</div>
+                            <a class="nav-link" href="{{ url_for('customers') }}"><i class="bi bi-people"></i> {{ _d('nav_customers') }}</a>
+                            <hr>
+                            <div class="fw-bold small text-muted text-uppercase mt-2 mb-1"><i class="bi bi-person-badge"></i> Active Staff</div>
+                            <form method="POST" action="{{ url_for('set_staff') }}" class="px-3 py-1">
+                                <select name="staff_name" class="form-select form-select-sm" onchange="this.form.submit()">
+                                    <option value="">— None —</option>
+                                    {% for s in staff_list %}
+                                    <option value="{{ s.name }}" {% if staff_name() == s.name %}selected{% endif %}>{{ s.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </form>
+                            <hr>
+                            <a class="nav-link" href="{{ url_for('settings') }}"><i class="bi bi-gear"></i> {{ _d('nav_settings') }}</a>
+                            <a class="nav-link" href="{{ url_for('set_lang', code='en') }}">🇬🇧 EN</a>
+                            <a class="nav-link" href="{{ url_for('set_lang', code='km') }}">🇰🇭 ខ្មែរ</a>
+                            <a class="nav-link" href="#" onclick="toggleTheme();return false"><i class="bi bi-moon-stars"></i> <span class="theme-label">Dark</span></a>
+                            <hr>
+                            <a class="nav-link text-danger" href="{{ url_for('logout') }}"><i class="bi bi-box-arrow-right"></i> {{ _d('nav_logout') }}</a>
+                        </nav>
+                    </div>
+                </div>
+
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show">{{ message }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>
+                {% endfor %}
+                {% endif %}
+                {% endwith %}
+
+                {% block content %}{% endblock %}
+            </div>
+        </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <div id="pinBubble" class="position-fixed top-0 start-0 w-100 h-100 d-none" style="z-index:10000;background:rgba(0,0,0,.3);backdrop-filter:blur(2px)">
+      <div class="position-absolute top-50 start-50 translate-middle" style="min-width:220px">
+        <div class="card shadow-lg border-0" style="border-radius:16px">
+          <div class="card-body text-center p-4">
+            <div class="mb-2"><i class="bi bi-lock fs-4 text-muted"></i></div>
+            <div class="small text-muted mb-3">Enter PIN to show prices</div>
+            <input type="password" id="pinInput" class="form-control form-control-lg text-center" placeholder="••••••" maxlength="6" inputmode="numeric" style="font-size:1.5rem;letter-spacing:8px;border-radius:12px">
+            <div id="pinError" class="text-danger small mt-2 d-none">Wrong PIN</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script>
+    var PRICES_UNLOCKED = {{ 'true' if session.get('prices_unlocked') else 'false' }};
+    function getTheme() { return localStorage.getItem('theme') || 'light'; }
+    function setTheme(t) {
+      document.documentElement.setAttribute('data-theme', t);
+      localStorage.setItem('theme', t);
+      document.querySelectorAll('.theme-label').forEach(function(el) { el.textContent = t === 'dark' ? 'Light' : 'Dark'; });
+      document.querySelectorAll('.theme-label').forEach(function(el) {
+        var parentLink = el.closest('a');
+        if (parentLink) {
+          var ic = parentLink.querySelector('i');
+          if (ic) ic.className = t === 'dark' ? 'bi bi-sun' : 'bi bi-moon-stars';
+        }
+      });
+    }
+    function toggleTheme() {
+      var cur = getTheme();
+      setTheme(cur === 'dark' ? 'light' : 'dark');
+      // Persist to server via AJAX so next page load uses correct theme
+      fetch('/set-theme', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:'theme='+(cur === 'dark' ? 'light' : 'dark') });
+    }
+    document.addEventListener('DOMContentLoaded', function() {
+      setTheme(getTheme());
+      document.getElementById('pinBubble').addEventListener('click', function(e) { if (e.target === this) hidePinBubble(); });
+    });
+    function showPinBubble() {
+      document.getElementById('pinBubble').classList.remove('d-none');
+      document.getElementById('pinInput').focus();
+    }
+    function hidePinBubble() {
+      document.getElementById('pinBubble').classList.add('d-none');
+      document.getElementById('pinInput').value = '';
+      document.getElementById('pinError').classList.add('d-none');
+    }
+    function submitPin() {
+      const pin = document.getElementById('pinInput').value;
+      if (pin.length < 6) return;
+      document.getElementById('pinError').classList.add('d-none');
+      fetch('/unlock-prices', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:'pin='+encodeURIComponent(pin) })
+        .then(r => r.ok ? r.json() : Promise.reject())
+        .then(d => { if(d.ok) { hidePinBubble(); location.reload(); } })
+        .catch(() => { document.getElementById('pinError').classList.remove('d-none'); document.getElementById('pinInput').value = ''; document.getElementById('pinInput').focus(); });
+    }
+    function lockPrices() {
+      fetch('/lock-prices').then(() => location.reload());
+    }
+    document.getElementById('pinInput').addEventListener('input', function() { if (this.value.length >= 6) submitPin(); });
+    document.getElementById('pinInput').addEventListener('keydown', function(e) { if(e.key==='Enter') submitPin(); });
+    </script>
+</body>
+</html>

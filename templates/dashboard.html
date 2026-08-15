@@ -1,0 +1,239 @@
+{% extends "base.html" %}
+{% block content %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0"><i class="bi bi-speedometer2"></i> {{ _d('title_dashboard') }}</h4>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('sellout_page') }}" class="btn btn-lg btn-success"><i class="bi bi-cart-plus"></i> {{ _d('sellout') }}</a>
+    <button class="btn btn-sm {{ 'btn-outline-warning' if prices_unlocked() else 'btn-outline-secondary' }}" onclick="{{ 'lockPrices()' if prices_unlocked() else 'showPinBubble()' }}">
+      <i class="bi {{ 'bi-unlock' if prices_unlocked() else 'bi-lock' }}"></i> {{ 'Hide Prices' if prices_unlocked() else 'Show Prices' }}
+    </button>
+  </div>
+</div>
+
+<div class="card stat-card mb-3">
+  <div class="card-body py-2">
+    <form method="GET" class="row g-2 align-items-end">
+      <div class="col-auto"><label class="small text-muted">Sellout from</label></div>
+      <div class="col-auto"><input type="date" name="from" class="form-control form-control-sm" value="{{ from_date }}"></div>
+      <div class="col-auto"><label class="small text-muted">to</label></div>
+      <div class="col-auto"><input type="date" name="to" class="form-control form-control-sm" value="{{ to_date }}"></div>
+      <div class="col-auto"><button class="btn btn-sm btn-outline-primary"><i class="bi bi-funnel"></i> Filter</button></div>
+    </form>
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-3 col-6">
+        <div class="stat-card card p-3 bg-primary bg-gradient text-white">
+            <div class="icon"><i class="bi bi-box"></i></div>
+            <div class="stat-value">{{ total_items }}</div>
+            <div class="stat-label">{{ _d('total_items') }}</div>
+            <small class="opacity-75">{{ total_stock }} {{ _d('units_stock') }}</small>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="stat-card card p-3 bg-success bg-gradient text-white">
+            <div class="icon"><i class="bi bi-currency-dollar"></i></div>
+            <div class="stat-value">{% if prices_unlocked() %}${{ "%.0f"|format(total_investment) }}{% else %}<i class="bi bi-lock fs-3 opacity-50"></i>{% endif %}</div>
+            <div class="stat-label">{{ _d('stock_value') }}</div>
+            <small class="opacity-75">{% if prices_unlocked() %}{{ _d('retail_val') }}: ${{ "%.0f"|format(total_retail) }}{% else %}&nbsp;{% endif %}</small>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="stat-card card p-3 bg-warning bg-gradient text-dark">
+            <div class="icon"><i class="bi bi-people"></i></div>
+            <div class="stat-value">{{ total_customers }}</div>
+            <div class="stat-label">{{ _d('customers_count') }}</div>
+            <small class="opacity-75">{{ pending_bills }} {{ _d('with_debt') }}</small>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="stat-card card p-3 bg-danger bg-gradient text-white">
+            <div class="icon"><i class="bi bi-cash-stack"></i></div>
+            <div class="stat-value">{% if prices_unlocked() %}${{ "%.0f"|format(total_debt) }}{% else %}<i class="bi bi-lock fs-3 opacity-50"></i>{% endif %}</div>
+            <div class="stat-label">{{ _d('total_debt') }}</div>
+            <small class="opacity-75">{{ pending_bills }} {{ _d('pending_bills') }}</small>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-md-6">
+    <div class="card stat-card">
+      <div class="card-header bg-white"><strong><i class="bi bi-credit-card"></i> Bill Payment Chart</strong></div>
+      <div class="card-body"><canvas id="billChart" height="200"></canvas></div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card stat-card">
+      <div class="card-header bg-white"><strong><i class="bi bi-box"></i> Stock by Brand</strong></div>
+      <div class="card-body"><canvas id="brandChart" height="200"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-12">
+    <div class="card stat-card">
+      <div class="card-header bg-white"><strong><i class="bi bi-cart"></i> Sellout Overview ({{ from_date }} to {{ to_date }})</strong></div>
+      <div class="card-body"><canvas id="selloutChart" height="120"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-6">
+        <div class="card stat-card">
+            <div class="card-header bg-white"><strong><i class="bi bi-clock-history"></i> {{ _d('recent_sales') }}</strong></div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead><tr><th>{{ _d('item') }}</th><th>{{ _d('qty') }}</th><th>{{ _d('revenue') }}</th><th>{{ _d('date') }}</th></tr></thead>
+                        <tbody>
+                            {% for s in recent_sales %}
+                            <tr>
+                                <td>{{ s.item_name }}</td>
+                                <td>{{ s.quantity }}</td>
+                                <td>{% if prices_unlocked() %}${{ "%.0f"|format(s.quantity * s.price) }}{% else %}<i class="bi bi-lock"></i>{% endif %}</td>
+                                <td><small class="text-muted">{{ s.timestamp[:10] }}</small></td>
+                            </tr>
+                            {% else %}
+                            <tr><td colspan="4" class="text-center text-muted py-3">No sales yet</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card stat-card">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <strong><i class="bi bi-exclamation-triangle"></i> Low Stock Items</strong>
+                <a href="{{ url_for('inventory') }}" class="btn btn-sm btn-outline-danger"><i class="bi bi-box"></i> View All</a>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead><tr><th>Item</th><th>Brand</th><th>Qty</th></tr></thead>
+                        <tbody>
+                            {% for item in low_stock_items %}
+                            <tr>
+                                <td>{{ item.name }}</td>
+                                <td>{{ item.brand_emoji or '' }} {{ item.category }}</td>
+                                <td><span class="badge bg-{{ 'warning' if item.quantity > 0 else 'danger' }}">{{ item.quantity }}</span></td>
+                            </tr>
+                            {% else %}
+                            <tr><td colspan="3" class="text-center text-muted py-3">No low-stock items</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead><tr><th>{{ _d('customer') }}</th><th>{{ _d('amount') }}</th><th>{{ _d('due') }}</th><th>{{ _d('status') }}</th></tr></thead>
+                        <tbody>
+                            {% for p in upcoming_payments %}
+                            <tr>
+                                <td>{{ p.customer_name }}</td>
+                                <td>{% if prices_unlocked() %}${{ "%.0f"|format(p.amount) }}{% else %}<i class="bi bi-lock"></i>{% endif %}</td>
+                                <td><small>{{ p.due_date }}</small></td>
+                                <td><span class="badge bg-{{ 'warning' if p.status == 'pending' else 'info' }}">{{ p.status }}</span></td>
+                            </tr>
+                            {% else %}
+                            <tr><td colspan="4" class="text-center text-muted py-3">No pending payments</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card stat-card mb-4">
+  <div class="card-header bg-white d-flex justify-content-between align-items-center">
+    <strong><i class="bi bi-bell"></i> Notification Alert Preferences</strong>
+  </div>
+  <div class="card-body">
+    <form method="POST" action="{{ url_for('save_alert_prefs') }}" class="row g-3">
+      <div class="col-md-4">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" name="alert_bill" id="ab" value="1" {{ 'checked' if alert_bill == '1' }}>
+          <label class="form-check-label" for="ab"><i class="bi bi-credit-card text-warning"></i> Bill Payment Alerts</label>
+          <small class="d-block text-muted">Notify when bills are due or overdue</small>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" name="alert_stock" id="as" value="1" {{ 'checked' if alert_stock == '1' }}>
+          <label class="form-check-label" for="as"><i class="bi bi-box-seam text-danger"></i> Stock Run-Out Alerts</label>
+          <small class="d-block text-muted">Notify when stock is low or empty</small>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" name="alert_import" id="ai" value="1" {{ 'checked' if alert_import == '1' }}>
+          <label class="form-check-label" for="ai"><i class="bi bi-upload text-success"></i> Import Alerts</label>
+          <small class="d-block text-muted">Notify when new stock is imported</small>
+        </div>
+      </div>
+      <div class="col-12"><button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-save"></i> Save Preferences</button></div>
+    </form>
+  </div>
+</div>
+
+<script>
+var labelsBill = {{ bill_chart_labels | tojson }};
+var dataPaid = {{ bill_chart_paid | tojson }};
+var dataPending = {{ bill_chart_pending | tojson }};
+new Chart(document.getElementById('billChart'), {
+  type: 'bar', data: {
+    labels: labelsBill,
+    datasets: [
+      { label: 'Paid', data: dataPaid, backgroundColor: 'rgba(40,167,69,.7)', borderRadius: 4 },
+      { label: 'Pending', data: dataPending, backgroundColor: 'rgba(255,193,7,.7)', borderRadius: 4 }
+    ]
+  },
+  options: { responsive: true, plugins: { legend: { position: 'top' } },
+    scales: { x: { grid: { display: false } }, y: { beginAtZero: true, grid: { color: '#eee' } } } }
+});
+
+var labelsBrand = {{ brand_stock_labels | tojson }};
+var dataBrand = {{ brand_stock_data | tojson }};
+new Chart(document.getElementById('brandChart'), {
+  type: 'bar', data: {
+    labels: labelsBrand,
+    datasets: [{ label: 'In Stock', data: dataBrand, backgroundColor: [
+      '#4e73df','#1cc88a','#36b9cc','#f6c23e','#e74a3b','#5a5c69','#858796','#6f42c1','#fd7e14','#20c9a6','#3b9e6d',
+      '#a1845c','#e83e8c','#17a2b8','#6c757d'
+    ], borderRadius: 4 }]
+  },
+  options: { responsive: true, indexAxis: 'y', plugins: { legend: { display: false } },
+    scales: { x: { beginAtZero: true, grid: { color: '#eee' } }, y: { grid: { display: false } } } }
+});
+
+var dates = {{ sellout_dates | tojson }};
+var qty = {{ sellout_qty | tojson }};
+var rev = {{ sellout_rev | tojson }};
+new Chart(document.getElementById('selloutChart'), {
+  type: 'line', data: {
+    labels: dates,
+    datasets: [
+      { label: 'Qty Sold', data: qty, borderColor: '#4e73df', backgroundColor: 'rgba(78,115,223,.1)', fill: true, tension: .3, pointRadius: 3 },
+      { label: 'Revenue $', data: rev, borderColor: '#1cc88a', backgroundColor: 'rgba(28,200,138,.1)', fill: true, tension: .3, pointRadius: 3, yAxisID: 'y1' }
+    ]
+  },
+  options: { responsive: true, plugins: { legend: { position: 'top' } },
+    scales: { x: { grid: { display: false } }, y: { beginAtZero: true, grid: { color: '#eee' }, position: 'left' },
+      y1: { beginAtZero: true, grid: { display: false }, position: 'right' } } }
+});
+</script>
+{% endblock %}

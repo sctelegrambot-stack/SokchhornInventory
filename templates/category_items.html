@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <a href="{{ url_for('categories') }}" class="btn btn-sm btn-outline-secondary me-2"><i class="bi bi-arrow-left"></i> {{ _d('back') }}</a>
+        <h4 class="d-inline">{{ category.emoji }} {{ category.name }}</h4>
+        <span class="badge bg-primary ms-2">{{ items|length }} {{ _d('items_count') }}</span>
+    </div>
+    <div class="d-flex gap-2">
+        <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#importModal"><i class="bi bi-upload"></i> {{ _d('excel') }} Import</button>
+        <button class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#addItemModal"><i class="bi bi-plus-lg"></i> {{ _d('add_product') }}</button>
+    </div>
+</div>
+
+<div class="card stat-card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead><tr><th>#</th><th>{{ _d('barcode') }}</th><th>{{ _d('name') }}</th><th>{{ _d('brand') }}</th><th>RAM/ROM</th><th>{{ _d('price') }}</th><th>{{ _d('cost') }}</th><th>{{ _d('stock') }}</th><th>{{ _d('actions') }}</th></tr></thead>
+                <tbody>
+                    {% for item in items %}
+                    <tr>
+                        <td>{{ loop.index }}</td>
+                        <td><code class="small">{{ item.barcode or item.product_code or '—' }}</code></td>
+                        <td><a href="{{ url_for('item_detail', item_id=item.id) }}" class="text-decoration-none">{{ item.name }}</a></td>
+                        <td>{{ item.brand_emoji or '' }} {{ item.category }}</td>
+                        <td><small class="text-muted">{{ item.ram or '' }}{{ '/' if item.ram and item.rom else '' }}{{ item.rom or '' }}</small></td>
+                        <td><strong>{% if session.get('prices_unlocked') %}${{ "%.0f"|format(item.price) if item.price else '-' }}{% else %}<i class="bi bi-lock text-muted"></i>{% endif %}</strong></td>
+                        <td><span class="text-muted">{% if session.get('prices_unlocked') %}${{ "%.0f"|format(item.cost_price) if item.cost_price else '-' }}{% else %}<i class="bi bi-lock"></i>{% endif %}</span></td>
+                        <td><span class="badge bg-{{ 'success' if item.quantity > 10 else 'warning' if item.quantity > 0 else 'danger' }}">{{ item.quantity }}</span></td>
+                        <td>
+                            <form method="POST" action="{{ url_for('category_delete_item', group_id=category.id, item_id=item.id) }}" class="d-inline" onsubmit="return confirm('Delete {{ item.name }}?')">
+                                <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="9" class="text-center text-muted py-4">{{ _d('no_category_items') }}</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="addItemModal" tabindex="-1">
+    <div class="modal-dialog modal-sm"><div class="modal-content">
+        <form method="POST" action="{{ url_for('category_add_item', group_id=category.id) }}">
+            <div class="modal-header"><h6><i class="bi bi-plus-lg"></i> {{ _d('add_product') }} — {{ category.name }}</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <div class="mb-2"><label class="form-label small">{{ _d('name') }} *</label><input type="text" name="name" class="form-control" required></div>
+                <div class="mb-2"><label class="form-label small">{{ _d('brand') }} *</label>
+                    <select name="brand" class="form-select" required>
+                        <option value="">Select brand…</option>
+                        {% for b in brands %}<option value="{{ b }}">{{ b }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="row"><div class="col">
+                    <div class="mb-2"><label class="form-label small">RAM</label><input type="text" name="ram" class="form-control"></div>
+                </div><div class="col">
+                    <div class="mb-2"><label class="form-label small">ROM</label><input type="text" name="rom" class="form-control"></div>
+                </div></div>
+                <div class="mb-2"><label class="form-label small">Product Code</label><input type="text" name="product_code" class="form-control"></div>
+                <div class="mb-2"><label class="form-label small">{{ _d('barcode') }}</label>
+                    <div class="input-group">
+                        <input type="text" name="barcode" class="form-control" placeholder="Auto-generate">
+                        <button class="btn btn-outline-secondary" type="button" onclick="genBarcode()"><i class="bi bi-arrow-repeat"></i></button>
+                    </div>
+                </div>
+                <div class="row"><div class="col">
+                    <div class="mb-2"><label class="form-label small">{{ _d('price') }}</label><input type="text" name="price" class="form-control"></div>
+                </div><div class="col">
+                    <div class="mb-2"><label class="form-label small">{{ _d('cost') }}</label><input type="text" name="cost_price" class="form-control"></div>
+                </div></div>
+                <div class="mb-2"><label class="form-label small">{{ _d('stock') }}</label><input type="number" name="qty" class="form-control" value="1" min="0"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">{{ _d('no_customers')|replace('No ','Cancel') }}</button>
+                <button type="submit" class="btn btn-sm btn-success"><i class="bi bi-plus-lg"></i> {{ _d('add_product') }}</button>
+            </div>
+        </form>
+    </div></div>
+</div>
+
+<div class="modal fade" id="importModal" tabindex="-1">
+    <div class="modal-dialog"><div class="modal-content">
+        <form method="POST" action="{{ url_for('category_import', group_id=category.id) }}" enctype="multipart/form-data">
+            <div class="modal-header"><h6><i class="bi bi-upload"></i> {{ _d('excel') }} Import — {{ category.name }}</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <p class="small text-muted">Upload an .xlsx file with columns: <strong>Name, Brand, Quantity, Price, Cost, RAM, ROM, Code, Barcode</strong></p>
+                <div class="mb-3">
+                    <label class="form-label small">Select Excel file</label>
+                    <input type="file" name="file" class="form-control form-control-sm" accept=".xlsx" required>
+                </div>
+                <a href="{{ url_for('download_template') }}" class="small"><i class="bi bi-download"></i> Download template</a>
+                <div class="mt-2 small text-info"><i class="bi bi-info-circle"></i> Barcode auto-generated if left blank</div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">{{ _d('no_customers')|replace('No ','Cancel') }}</button>
+                <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-upload"></i> {{ _d('excel') }} Import</button>
+            </div>
+        </form>
+    </div></div>
+</div>
+
+<script>
+function genBarcode() {
+    var b = 'BR-' + Math.floor(10000 + Math.random() * 90000) + '-' + Math.floor(100 + Math.random() * 900);
+    document.querySelector('input[name="barcode"]').value = b;
+}
+</script>
+{% endblock %}

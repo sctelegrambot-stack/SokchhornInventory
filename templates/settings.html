@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row g-4">
+  <div class="col-md-6">
+    <div class="card stat-card h-100">
+      <div class="card-body p-4">
+        <h5><i class="bi bi-key"></i> {{ _d('change_pw_title') }}</h5>
+        <form method="POST">
+          <div class="mb-2"><label class="form-label">{{ _d('current_pw') }}</label><input type="password" name="current" class="form-control" required></div>
+          <div class="mb-2"><label class="form-label">{{ _d('new_pw') }}</label><input type="password" name="new_password" class="form-control" required minlength="4"></div>
+          <div class="mb-2"><label class="form-label">{{ _d('confirm_pw') }}</label><input type="password" name="confirm" class="form-control" required minlength="4"></div>
+          <button type="submit" class="btn btn-primary">{{ _d('change_pw_btn') }}</button>
+        </form>
+      </div>
+    </div>
+    <div class="card stat-card h-100 mt-3">
+      <div class="card-body p-4">
+        <h5><i class="bi bi-shield-lock"></i> {{ _d('bot_pin') }}</h5>
+        <form method="POST">
+          <div class="mb-2"><label class="form-label">{{ _d('new_pin') }}</label><input type="password" name="new_pin" class="form-control" required minlength="4" maxlength="6"></div>
+          <div class="mb-2"><label class="form-label">{{ _d('confirm_pw') }}</label><input type="password" name="confirm_pin" class="form-control" required minlength="4" maxlength="6"></div>
+          <button type="submit" class="btn btn-primary">{{ _d('save_pin') }}</button>
+        </form>
+      </div>
+    </div>
+    <div class="card stat-card h-100 mt-3">
+      <div class="card-body p-4">
+        <h5><i class="bi bi-unlock"></i> Dashboard Price Unlock PIN</h5>
+        <form method="POST">
+          <div class="mb-2"><label class="form-label">Set unlock PIN</label><input type="password" name="new_pin" class="form-control" required minlength="4" maxlength="6"></div>
+          <div class="mb-2"><label class="form-label">Confirm PIN</label><input type="password" name="confirm_pin" class="form-control" required minlength="4" maxlength="6"></div>
+          <button type="submit" class="btn btn-warning">Set PIN</button>
+        </form>
+      </div>
+    </div>
+    <div class="card stat-card h-100 mt-3">
+      <div class="card-body p-4">
+        <h5><i class="bi bi-person-badge"></i> Telegram Bot User Level</h5>
+        <form method="POST">
+          <div class="mb-2">
+            <select name="bot_user_level" class="form-select">
+              <option value="admin" {% if bot_user_level == 'admin' %}selected{% endif %}>Admin</option>
+              <option value="staff" {% if bot_user_level == 'staff' %}selected{% endif %}>Staff</option>
+            </select>
+            <div class="form-text small">Staff: limited access. Admin: full access.</div>
+          </div>
+          <button type="submit" class="btn btn-primary">Save Level</button>
+        </form>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card stat-card h-100">
+      <div class="card-body p-4">
+        <h5><i class="bi bi-bell"></i> Stock Alert Settings</h5>
+        <form method="POST">
+          <div class="mb-2">
+            <label class="form-label">Alert when stock ≤</label>
+            <input type="number" name="stock_threshold" class="form-control" value="{{ stock_threshold }}" min="1">
+          </div>
+          <button type="submit" class="btn btn-primary">Save Threshold</button>
+        </form>
+        <hr>
+        <form method="POST">
+          <div class="mb-2">
+            <label class="form-label">Alert interval (hours)</label>
+            <input type="number" name="alert_interval" class="form-control" value="{{ alert_interval }}" min="0" step="0.5">
+            <div class="form-text small">0 = every sellout</div>
+          </div>
+          <button type="submit" class="btn btn-primary">Save Interval</button>
+        </form>
+        <hr>
+        <h6><i class="bi bi-people"></i> Notification Recipients</h6>
+        <form method="POST" class="row g-2 mb-3">
+          <input type="hidden" name="action" value="add_notification_user">
+          <div class="col-md-4"><input type="text" name="chat_id" class="form-control" placeholder="Telegram ID" required></div>
+          <div class="col-md-4"><input type="text" name="name" class="form-control" placeholder="Label (optional)"></div>
+          <div class="col-md-2"><button type="submit" class="btn btn-primary w-100">Add User</button></div>
+        </form>
+        <div class="table-responsive" style="max-height:300px;overflow-y:auto">
+          <table class="table table-sm table-dark mb-0">
+            <thead><tr>
+              <th>Chat ID</th><th>Name</th>
+              <th title="Stock alerts">📦 Stock</th>
+              <th title="Bill alerts">💰 Bill</th>
+              <th title="Import alerts">📥 Import</th>
+              <th></th>
+            </tr></thead>
+            <tbody>
+              {% for u in notif_users %}
+              <tr>
+                <td><code>{{ u.chat_id }}</code></td>
+                <td>{{ u.name or '—' }}</td>
+                <td>
+                  <form method="POST" style="display:inline">
+                    <input type="hidden" name="action" value="toggle_notification_alert">
+                    <input type="hidden" name="user_id" value="{{ u.id }}">
+                    <input type="hidden" name="alert_type" value="stock_alerts">
+                    <button type="submit" class="btn btn-sm {% if u.stock_alerts %}btn-success{% else %}btn-outline-secondary{% endif %}">
+                      {{ 'ON' if u.stock_alerts else 'OFF' }}
+                    </button>
+                  </form>
+                </td>
+                <td>
+                  <form method="POST" style="display:inline">
+                    <input type="hidden" name="action" value="toggle_notification_alert">
+                    <input type="hidden" name="user_id" value="{{ u.id }}">
+                    <input type="hidden" name="alert_type" value="bill_alerts">
+                    <button type="submit" class="btn btn-sm {% if u.bill_alerts %}btn-success{% else %}btn-outline-secondary{% endif %}">
+                      {{ 'ON' if u.bill_alerts else 'OFF' }}
+                    </button>
+                  </form>
+                </td>
+                <td>
+                  <form method="POST" style="display:inline">
+                    <input type="hidden" name="action" value="toggle_notification_alert">
+                    <input type="hidden" name="user_id" value="{{ u.id }}">
+                    <input type="hidden" name="alert_type" value="import_alerts">
+                    <button type="submit" class="btn btn-sm {% if u.import_alerts %}btn-success{% else %}btn-outline-secondary{% endif %}">
+                      {{ 'ON' if u.import_alerts else 'OFF' }}
+                    </button>
+                  </form>
+                </td>
+                <td>
+                  <form method="POST" onsubmit="return confirm('Remove this user?')" style="display:inline">
+                    <input type="hidden" name="action" value="delete_notification_user">
+                    <input type="hidden" name="user_id" value="{{ u.id }}">
+                    <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-x"></i></button>
+                  </form>
+                </td>
+              </tr>
+              {% else %}
+              <tr><td colspan="6" class="text-muted text-center">No users added yet</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <div class="form-text small mt-1">Toggle ON/OFF per alert type. Add users by their Telegram chat ID.</div>
+        <hr>
+        <form method="POST" onsubmit="return confirm('Send test notification?')">
+          <input type="hidden" name="action" value="test_notification">
+          <div class="mb-2">
+            <label class="form-label">Test notification to ID</label>
+            <input type="text" name="test_chat_id" class="form-control" placeholder="7185846273">
+          </div>
+          <button type="submit" class="btn btn-info">Send Test</button>
+        </form>
+      </div>
+    </div>
+    <div class="card stat-card h-100 mt-3">
+      <div class="card-body p-4">
+        <h5><i class="bi bi-calendar"></i> Customer Bill Alert</h5>
+        <form method="POST">
+          <div class="mb-2">
+            <label class="form-label">Alert when bill due within (days)</label>
+            <input type="number" name="bill_alert_days" class="form-control" value="{{ bill_alert_days }}" min="1">
+            <div class="form-text small">Telegram bot will send alert for bills due within X days</div>
+          </div>
+          <button type="submit" class="btn btn-primary">Save</button>
+        </form>
+      </div>
+    </div>
+    <div class="card stat-card h-100 mt-3">
+      <div class="card-body p-4">
+        <h5><i class="bi bi-play-circle"></i> Auto Startup</h5>
+        <form method="POST">
+          <input type="hidden" name="action" value="toggle_startup">
+          {% if auto_startup == 'yes' %}
+          <p class="text-success"><i class="bi bi-check-circle"></i> Auto-startup is <strong>enabled</strong></p>
+          <button type="submit" class="btn btn-danger">Disable Auto-Startup</button>
+          {% else %}
+          <p class="text-muted">Auto-startup is <strong>disabled</strong></p>
+          <button type="submit" class="btn btn-success">Enable Auto-Startup</button>
+          {% endif %}
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

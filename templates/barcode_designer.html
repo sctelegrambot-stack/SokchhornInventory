@@ -1,0 +1,262 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+.page-canvas {
+  background: #fff; box-shadow: 0 2px 12px rgba(0,0,0,.15);
+  padding: var(--margin); margin: 0 auto;
+  display: grid; align-content: start; position: relative;
+}
+.label-slot {
+  border: 1px dashed #bbb; border-radius: 2px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  font-size: 7px; text-align: center; cursor: pointer;
+  overflow: hidden; position: relative; background: #fafafa;
+}
+.label-slot.filled { border: .5px solid #333; background: #fff; cursor: grab; padding: 1mm .5mm; }
+.label-slot.filled:active { cursor: grabbing; }
+.label-slot.drag-over { border-color: #0d6efd; background: #e8f0fe; }
+.label-slot .remove-btn {
+  position: absolute; top: 0; right: 1px;
+  background: #dc3545; color: #fff; border: none;
+  border-radius: 50%; width: 14px; height: 14px;
+  font-size: 9px; line-height: 14px; text-align: center;
+  cursor: pointer; display: none; padding: 0; z-index: 2;
+}
+.label-slot.filled:hover .remove-btn { display: block; }
+.label-slot svg { max-height: 10mm; width: auto; max-width: 95%; }
+.label-slot .item-name { font-weight: 600; font-size: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; line-height: 1.1; }
+.label-slot .item-code { font-family: monospace; font-size: 7px; color: #555; line-height: 1.1; }
+
+#sidebar {
+  width: 300px; flex-shrink: 0; background: #f8f9fa; border-radius: 8px; padding: 12px;
+  max-height: calc(100vh - 100px); overflow-y: auto; position: sticky; top: 80px;
+}
+.brand-group { margin-bottom: 6px; }
+.brand-header {
+  padding: 4px 8px; font-weight: 700; font-size: 13px; cursor: pointer;
+  border-radius: 4px; display: flex; align-items: center; gap: 6px;
+  background: #e9ecef; user-select: none;
+}
+.brand-header:hover { background: #dee2e6; }
+.brand-header .collapse-icon { transition: transform .15s; }
+.brand-header.collapsed .collapse-icon { transform: rotate(-90deg); }
+.brand-items { padding-left: 4px; }
+.brand-items.collapsed { display: none; }
+.item-row {
+  padding: 4px 6px; border-radius: 3px; cursor: grab;
+  display: flex; align-items: center; gap: 6px; font-size: 12px;
+  border: 1px solid transparent; margin-top: 2px;
+}
+.item-row:hover { background: #e2e6ea; border-color: #adb5bd; }
+.item-row:active { cursor: grabbing; }
+.item-row .code-badge { font-family: monospace; font-size: 10px; background: #e9ecef; padding: 1px 4px; border-radius: 3px; }
+.page-wrap { display: flex; gap: 20px; align-items: flex-start; }
+@media print {
+  body { background: #fff; }
+  #sidebar, .no-print, .btn { display: none !important; }
+  .page-wrap { display: block; }
+  .page-canvas { box-shadow: none; margin: 0; page-break-after: always; }
+  .label-slot { border: 1px solid #999 !important; break-inside: avoid; }
+  .label-slot .remove-btn { display: none !important; }
+}
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-3 no-print">
+  <h4><i class="bi bi-upc-scan"></i> Barcode Label Designer</h4>
+  <div class="d-flex gap-2 flex-wrap">
+    <select id="layoutSelect" class="form-select form-select-sm" style="width:auto" onchange="switchLayout()">
+      {% for l in layouts %}
+      <option value="{{ l.id }}" data-cols="{{ l.cols }}" data-rows="{{ l.rows }}" data-lw="{{ l.lw }}" data-lh="{{ l.lh }}" data-margin="{{ l.margin }}" data-gap="{{ l.gap }}" data-pw="{{ l.page_w }}" data-ph="{{ l.page_h }}">{{ l.name }}</option>
+      {% endfor %}
+    </select>
+    <select id="encodeType" class="form-select form-select-sm" style="width:auto" onchange="updateAllLabels()">
+      <option value="code">Barcode: Product Code</option>
+      <option value="name">Barcode: Product Name</option>
+    </select>
+    <button class="btn btn-sm btn-outline-secondary" onclick="clearAll()"><i class="bi bi-trash"></i> Clear All</button>
+    <button class="btn btn-sm btn-success" onclick="doPrint()"><i class="bi bi-printer"></i> Print</button>
+    <button class="btn btn-sm btn-danger" onclick="exportPdf()"><i class="bi bi-filetype-pdf"></i> PDF</button>
+    <a href="{{ url_for('inventory') }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-arrow-left"></i> Back</a>
+  </div>
+</div>
+
+<div class="page-wrap">
+  <div id="sidebar" class="no-print">
+    <strong><i class="bi bi-box-seam"></i> Items by Brand</strong>
+    <div id="itemList" class="mt-2">
+      {% for brand, brand_items in grouped.items() %}
+      <div class="brand-group">
+        <div class="brand-header" onclick="toggleBrand(this)">
+          <span class="collapse-icon">▼</span>
+          <span>{{ brand_items[0].brand_emoji or '📦' }}</span>
+          <span>{{ brand }}</span>
+          <span class="badge bg-secondary ms-auto">{{ brand_items|length }}</span>
+        </div>
+        <div class="brand-items">
+          {% for item in brand_items %}
+          <div class="item-row" draggable="true" data-id="{{ item.id }}" data-name="{{ item.name }}" data-code="{{ item.product_code or '' }}" data-brand="{{ item.brand_name or item.category }}">
+            <span class="flex-grow-1">{{ item.name }}</span>
+            <span class="code-badge">{{ item.product_code or '—' }}</span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div style="flex-grow:1; overflow-x:auto">
+    <div id="canvasContainer"></div>
+    <p class="text-muted small text-center mt-2 no-print" id="layoutInfo"></p>
+  </div>
+</div>
+
+<script>
+let slots = {};
+let totalSlots = 0;
+
+document.querySelectorAll('.item-row').forEach(el => {
+  el.addEventListener('dragstart', e => {
+    e.dataTransfer.setData('text/plain', JSON.stringify({
+      id: el.dataset.id, name: el.dataset.name,
+      code: el.dataset.code, brand: el.dataset.brand
+    }));
+    e.dataTransfer.effectAllowed = 'copy';
+  });
+});
+
+function toggleBrand(header) {
+  header.classList.toggle('collapsed');
+  header.nextElementSibling.classList.toggle('collapsed');
+}
+
+function switchLayout() {
+  if (Object.keys(slots).length > 0 && !confirm('Change layout? This will clear placed labels.')) return;
+  slots = {};
+  const sel = document.getElementById('layoutSelect');
+  const opt = sel.options[sel.selectedIndex];
+  const cols = parseInt(opt.dataset.cols);
+  const rows = parseInt(opt.dataset.rows);
+  totalSlots = cols * rows * 2;
+  const pw = parseFloat(opt.dataset.pw);
+  const ph = parseFloat(opt.dataset.ph);
+  const lw = parseFloat(opt.dataset.lw);
+  const lh = parseFloat(opt.dataset.lh);
+  const margin = parseFloat(opt.dataset.margin);
+  const gap = parseFloat(opt.dataset.gap);
+  const canvas = document.getElementById('canvasContainer');
+  canvas.innerHTML = '';
+  const page = document.createElement('div');
+  page.className = 'page-canvas';
+  page.style.width = pw + 'mm';
+  page.style.minHeight = ph + 'mm';
+  page.style.padding = margin + 'mm';
+  page.style.gridTemplateColumns = 'repeat(' + cols + ', ' + lw + 'mm)';
+  page.style.gap = gap + 'mm';
+  for (let i = 0; i < totalSlots; i++) {
+    const slot = document.createElement('div');
+    slot.className = 'label-slot';
+    slot.dataset.slot = i;
+    slot.style.width = lw + 'mm';
+    slot.style.height = lh + 'mm';
+    slot.ondragover = function(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; this.classList.add('drag-over'); };
+    slot.ondragleave = function(e) { this.classList.remove('drag-over'); };
+    slot.ondrop = function(e) {
+      e.preventDefault();
+      this.classList.remove('drag-over');
+      const data = JSON.parse(e.dataTransfer.getData('text/plain'));
+      fillSlot(this, data);
+    };
+    page.appendChild(slot);
+  }
+  canvas.appendChild(page);
+  document.getElementById('layoutInfo').textContent = opt.text + ' · ' + totalSlots + ' slots';
+}
+
+function getEncodeType() { return document.getElementById('encodeType').value; }
+
+function getBarcodeContent(data) {
+  return getEncodeType() === 'code' && data.code ? data.code : data.name;
+}
+
+function fillSlot(slot, data, force) {
+  const idx = slot.dataset.slot;
+  if (!force && slots[idx]) return;
+  slots[idx] = data;
+  slot.classList.add('filled');
+  const content = getBarcodeContent(data);
+  slot.innerHTML =
+    '<button class="remove-btn" onclick="removeSlot(' + idx + ')">&times;</button>' +
+    '<div class="item-name">' + data.brand + ' ' + data.name + '</div>' +
+    '<div class="item-code">' + content + '</div>' +
+    '<img src="/inventory/barcode/' + encodeURIComponent(content) + '/svg" alt="' + content + '" style="max-height:10mm;width:auto" onerror="this.outerHTML=\'<span style=color:red>\' + content + \'</span>\'">';
+}
+
+function removeSlot(idx) {
+  const slot = document.querySelector('.label-slot[data-slot="' + idx + '"]');
+  if (!slot) return;
+  delete slots[idx];
+  slot.classList.remove('filled');
+  slot.innerHTML = '';
+}
+
+function clearAll() {
+  if (!Object.keys(slots).length) return;
+  if (!confirm('Clear all labels?')) return;
+  for (let idx in slots) removeSlot(idx);
+}
+
+function updateAllLabels() {
+  Object.keys(slots).forEach(idx => {
+    const slot = document.querySelector('.label-slot[data-slot="' + idx + '"]');
+    if (slot && slot.classList.contains('filled')) fillSlot(slot, slots[idx], true);
+  });
+}
+
+function embedBarcodes() {
+  document.querySelectorAll('.label-slot.filled img').forEach(function(img) {
+    var src = img.getAttribute('src');
+    if (src && src.startsWith('/inventory/barcode/')) {
+      fetch(src).then(function(r) { return r.text(); }).then(function(svg) {
+        img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
+      }).catch(function(){});
+    }
+  });
+}
+
+function doPrint() {
+  embedBarcodes();
+  setTimeout(function() { window.print(); }, 300);
+}
+
+function exportPdf() {
+  const slotData = Object.values(slots);
+  if (!slotData.length) { alert('Place at least one label on the canvas first.'); return; }
+  const layoutId = document.getElementById('layoutSelect').value;
+  fetch('/inventory/barcode/export-pdf', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ slots: slotData, encode: getEncodeType(), layout: layoutId })
+  })
+  .then(function(r) { if (!r.ok) throw new Error('Server returned ' + r.status); return r.blob(); })
+  .then(function(blob) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = 'barcodes.pdf'; a.click();
+    URL.revokeObjectURL(a.href);
+  })
+  .catch(function(err) { alert('PDF export failed: ' + err.message); });
+}
+
+// Init on load
+document.addEventListener('DOMContentLoaded', function() {
+  switchLayout();
+  var t = setInterval(function() {
+    var allLoaded = true;
+    document.querySelectorAll('.label-slot.filled img').forEach(function(img) {
+      if (!img.complete) allLoaded = false;
+    });
+    if (allLoaded) { clearInterval(t); embedBarcodes(); }
+  }, 500);
+});
+</script>
+{% endblock %}

@@ -1,0 +1,80 @@
+============================================
+  CLOUDFLARE TUNNEL SETUP GUIDE
+  (Access dashboard from anywhere - free)
+============================================
+
+Step 1: Create Cloudflare account (free, no card)
+------------------------------------------------
+1. Go to https://dash.cloudflare.com/sign-up
+2. Enter your email and create a password
+3. Verify your email
+4. Skip the "Add a domain" step (not needed)
+
+Step 2: Download cloudflared
+------------------------------------------------
+1. Go to https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/
+2. Download the Windows 64-bit version
+3. Save it to C:\cloudflared\cloudflared.exe
+   (Or remember where you saved it)
+
+Step 3: Test the tunnel
+------------------------------------------------
+Open a Command Prompt and run:
+
+   cloudflared tunnel --url http://localhost:5000
+
+You should see output like:
+   "https://random-name.trycloudflare.com/"
+   
+That's your public dashboard URL! Copy it.
+
+Step 4: Set DASHBOARD_URL
+------------------------------------------------
+In Command Prompt, run:
+
+   setx DASHBOARD_URL "https://the-url-you-copied.trycloudflare.com/"
+
+Step 5: Update start_bot.bat
+------------------------------------------------
+Open start_bot.bat with Notepad.
+Make sure the CLOUDFLARE line is NOT commented out
+and the ngrok line IS commented out (has REM in front).
+
+By default, Cloudflare is already the active option.
+
+Step 6: Run the bot
+------------------------------------------------
+Double-click start_bot.bat
+
+You'll see:
+- A minimized bot window (Telegram bot)
+- A tunnel window showing the URL
+- The dashboard starts in the main window
+
+Step 7: Access dashboard
+------------------------------------------------
+Open your phone browser and go to:
+   https://the-url-you-copied.trycloudflare.com/
+
+Login with: admin@sokchhorn / 1234
+
+============================================
+  TROUBLESHOOTING
+============================================
+
+"cloudflared is not recognized":
+   - You need to add cloudflared to PATH or
+     use the full path like:
+     C:\cloudflared\cloudflared tunnel --url http://localhost:5000
+
+URL changes after PC restart:
+   - trycloudflare gives a new URL each restart
+   - Run setx DASHBOARD_URL again with the new URL
+   - For permanent URL, you'd need a custom domain ($8-12/year)
+
+Tunnel failed to start:
+   - Make sure port 5000 is not in use
+   - Check your internet connection
+   - Try running cloudflared commands manually
+
+============================================
