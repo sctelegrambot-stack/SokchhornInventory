@@ -26,11 +26,12 @@
                 </div>
                 <div class="mb-3">
                     <label class="form-label">{{ _d('password') }}</label>
-                    <input type="password" name="password" class="form-control" required minlength="4">
+                    <input type="password" name="password" class="form-control" required minlength="8" pattern="(?=.*[A-Z])(?=.*[0-9])(?=.*[^A-Za-z0-9]).{8,}">
+                    <div class="form-text small">At least 8 characters with an uppercase letter, a number, and a special character (e.g. Theo@1234)</div>
                 </div>
                 <div class="mb-3">
                     <label class="form-label">{{ _d('confirm_pw') }}</label>
-                    <input type="password" name="confirm" class="form-control" required minlength="4">
+                    <input type="password" name="confirm" class="form-control" required minlength="8" pattern="(?=.*[A-Z])(?=.*[0-9])(?=.*[^A-Za-z0-9]).{8,}">
                 </div>
                 <button type="submit" class="btn btn-primary w-100">{{ _d('register_btn') }}</button>
                 </form>

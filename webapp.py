@@ -1,5 +1,6 @@
 import sqlite3
 import html
+import re
 import sys, os, io, json, secrets
 from datetime import datetime, date, timedelta
 import openpyxl
@@ -406,6 +407,24 @@ def login_required(f):
         return f(*args, **kwargs)
     return wrapper
 
+def validate_password(pw):
+    if len(pw) < 8:
+        return 'Password must be at least 8 characters'
+    if not re.search(r'[A-Z]', pw):
+        return 'Password must contain an uppercase letter'
+    if not re.search(r'[0-9]', pw):
+        return 'Password must contain a number'
+    if not re.search(r'[^A-Za-z0-9]', pw):
+        return 'Password must contain a special character'
+    return None
+
+def set_config(conn, key, value):
+    cur = conn.execute("SELECT 1 FROM bot_config WHERE key = ?", (key,))
+    if cur.fetchone():
+        conn.execute("UPDATE bot_config SET value = ? WHERE key = ?", (value, key))
+    else:
+        conn.execute("INSERT INTO bot_config (key, value) VALUES (?, ?)", (key, value))
+
 @app.route('/')
 def index():
     if 'admin_id' in session:
@@ -434,18 +453,20 @@ def register():
             flash('Username and password required', 'danger')
         elif password != confirm:
             flash('Passwords do not match', 'danger')
-        elif len(password) < 4:
-            flash('Password must be at least 4 characters', 'danger')
         else:
-            try:
-                conn.execute("INSERT INTO admin (username, password_hash) VALUES (?, ?)",
-                             (username, generate_password_hash(password)))
-                conn.commit()
-                flash('Admin account created! Please log in.', 'success')
-                conn.close()
-                return redirect(url_for('login'))
-            except sqlite3.IntegrityError:
-                flash('Username already exists', 'danger')
+            err = validate_password(password)
+            if err:
+                flash(err, 'danger')
+            else:
+                try:
+                    conn.execute("INSERT INTO admin (username, password_hash) VALUES (?, ?)",
+                                 (username, generate_password_hash(password)))
+                    conn.commit()
+                    flash('Admin account created! Please log in.', 'success')
+                    conn.close()
+                    return redirect(url_for('login'))
+                except sqlite3.IntegrityError:
+                    flash('Username already exists', 'danger')
     conn.close()
     return render_template('register.html')
 
@@ -489,24 +510,37 @@ def settings():
                 flash('Current password is incorrect', 'danger')
             elif new_pass != confirm:
                 flash('New passwords do not match', 'danger')
-            elif len(new_pass) < 4:
-                flash('Password must be at least 4 characters', 'danger')
             else:
-                conn.execute("UPDATE admin SET password_hash = ? WHERE id = ?",
-                             (generate_password_hash(new_pass), session['admin_id']))
-                conn.commit()
-                flash('Password changed successfully', 'success')
-        elif 'new_pin' in request.form:
-            new_pin = request.form.get('new_pin', '')
-            confirm_pin = request.form.get('confirm_pin', '')
+                err = validate_password(new_pass)
+                if err:
+                    flash(err, 'danger')
+                else:
+                    conn.execute("UPDATE admin SET password_hash = ? WHERE id = ?",
+                                 (generate_password_hash(new_pass), session['admin_id']))
+                    conn.commit()
+                    flash('Password changed successfully', 'success')
+        elif 'bot_pin' in request.form:
+            new_pin = request.form.get('bot_pin', '')
+            confirm_pin = request.form.get('bot_pin_confirm', '')
             if new_pin != confirm_pin:
-                flash('PINs do not match', 'danger')
-            elif len(new_pin) < 4:
-                flash('PIN must be at least 4 characters', 'danger')
+                flash('Bot PINs do not match', 'danger')
+            elif not new_pin.isdigit() or len(new_pin) < 4 or len(new_pin) > 6:
+                flash('Bot PIN must be 4-6 digits', 'danger')
             else:
-                conn.execute("UPDATE bot_config SET value = ? WHERE key = 'unlock_pin'", (new_pin,))
+                set_config(conn, 'bot_unlock_pin', new_pin)
                 conn.commit()
                 flash('Bot PIN updated successfully', 'success')
+        elif 'dashboard_pin' in request.form:
+            new_pin = request.form.get('dashboard_pin', '')
+            confirm_pin = request.form.get('dashboard_pin_confirm', '')
+            if new_pin != confirm_pin:
+                flash('Dashboard PINs do not match', 'danger')
+            elif not new_pin.isdigit() or len(new_pin) < 4 or len(new_pin) > 6:
+                flash('Dashboard PIN must be 4-6 digits', 'danger')
+            else:
+                set_config(conn, 'unlock_pin', new_pin)
+                conn.commit()
+                flash('Dashboard Price Unlock PIN updated successfully', 'success')
         elif 'stock_threshold' in request.form:
             val = request.form.get('stock_threshold', '').strip()
             if val.isdigit() and int(val) > 0:

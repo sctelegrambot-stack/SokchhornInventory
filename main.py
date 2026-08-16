@@ -244,6 +244,7 @@ def init_db():
         sold INTEGER DEFAULT 0,
         FOREIGN KEY (item_id) REFERENCES items(id))''')
     cursor.execute("INSERT OR IGNORE INTO bot_config (key, value) VALUES ('unlock_pin', '123321')")
+    cursor.execute("INSERT OR IGNORE INTO bot_config (key, value) VALUES ('bot_unlock_pin', '123321')")
     cursor.execute("INSERT OR IGNORE INTO bot_config (key, value) VALUES ('stock_alert_threshold', '5')")
     cursor.execute("INSERT OR IGNORE INTO bot_config (key, value) VALUES ('alert_chat_ids', '7185846273')")
     cursor.execute("INSERT OR IGNORE INTO bot_config (key, value) VALUES ('alert_interval_hours', '0')")
@@ -2568,8 +2569,11 @@ async def handle_unlock_pin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     pin = update.message.text.strip()
     conn = sqlite3.connect(DB_PATH)
-    cur = conn.execute("SELECT value FROM bot_config WHERE key='unlock_pin'")
+    cur = conn.execute("SELECT value FROM bot_config WHERE key='bot_unlock_pin'")
     row = cur.fetchone()
+    if row is None:
+        cur = conn.execute("SELECT value FROM bot_config WHERE key='unlock_pin'")
+        row = cur.fetchone()
     conn.close()
     if row and pin == row[0]:
         context.user_data['unlocked'] = True
@@ -2827,11 +2831,12 @@ def main():
     init_db()
     try:
         conn = sqlite3.connect(DB_PATH)
-        cur = conn.execute("SELECT value FROM bot_config WHERE key='unlock_pin'")
-        row = cur.fetchone()
+        for key in ('unlock_pin', 'bot_unlock_pin'):
+            cur = conn.execute("SELECT value FROM bot_config WHERE key=?", (key,))
+            row = cur.fetchone()
+            if row and row[0] == '123321':
+                logger.warning("Default unlock PIN '123321' is still in use for '%s'. Change it in the web dashboard Settings.", key)
         conn.close()
-        if row and row[0] == '123321':
-            logger.warning("Default unlock PIN '123321' is still in use. Change it in the web dashboard Settings.")
     except Exception:
         pass
     tokens = os.getenv("TELEGRAM_BOT_TOKEN", "")
