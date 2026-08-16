@@ -179,6 +179,8 @@ function getBarcodeContent(data) {
   return getEncodeType() === 'code' && data.code ? data.code : data.name;
 }
 
+function esc(s){return String(s).replace(/[&<>"']/g,function(m){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m];});}
+
 function fillSlot(slot, data, force) {
   const idx = slot.dataset.slot;
   if (!force && slots[idx]) return;
@@ -187,9 +189,9 @@ function fillSlot(slot, data, force) {
   const content = getBarcodeContent(data);
   slot.innerHTML =
     '<button class="remove-btn" onclick="removeSlot(' + idx + ')">&times;</button>' +
-    '<div class="item-name">' + data.brand + ' ' + data.name + '</div>' +
-    '<div class="item-code">' + content + '</div>' +
-    '<img src="/inventory/barcode/' + encodeURIComponent(content) + '/svg" alt="' + content + '" style="max-height:10mm;width:auto" onerror="this.outerHTML=\'<span style=color:red>\' + content + \'</span>\'">';
+    '<div class="item-name">' + esc(data.brand) + ' ' + esc(data.name) + '</div>' +
+    '<div class="item-code">' + esc(content) + '</div>' +
+    '<img src="/inventory/barcode/' + encodeURIComponent(content) + '/svg" alt="' + esc(content) + '" style="max-height:10mm;width:auto" onerror="this.outerHTML=\'<span style=color:red>Barcode error</span>\'">';
 }
 
 function removeSlot(idx) {

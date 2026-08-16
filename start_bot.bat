@@ -1,6 +1,8 @@
 @echo off
 cd /d "%~dp0"
 title Sokchhorn Bot
+set "PY=%~dp0venv\Scripts\python.exe"
+if not exist "%PY%" set "PY=python"
 echo ============================================
 echo   Starting Sokchhorn Inventory Bot
 echo ============================================
@@ -19,23 +21,23 @@ timeout /t 5 /nobreak >nul
 REM Fetch URL from ngrok API
 echo [2/4] Getting public URL...
 set DASHBOARD_URL=
-for /f "tokens=*" %%a in ('powershell -Command "try{ $d=curl.exe -s http://127.0.0.1:4040/api/tunnels; $m=[regex]::Match($d,'https://[a-z0-9-]+\.ngrok-free\.(app|dev)'); if($m.Success){ $m.Value } else { '' } } catch{ '' }"') do set DASHBOARD_URL=%%a
+for /f "tokens=*" %%a in ('powershell -Command "try{ $d=curl.exe -s http://127.0.0.1:4040/api/tunnels; $m=[regex]::Match($d,'https://[a-z0-9-]+\.ngrok-free\.(app|dev)'); if($m.Success){ $m.Value + '/' } else { '' } } catch{ '' }"') do set DASHBOARD_URL=%%a
 
 if "%DASHBOARD_URL%"=="" (
     echo [WARN] Could not detect ngrok URL. Check the ngrok window.
     echo.
 ) else (
-    set DASHBOARD_URL=%DASHBOARD_URL%/
     echo [OK] Dashboard URL: %DASHBOARD_URL%
-    powershell -NoProfile -Command "$f='%~dp0.env'; $tok=''; if(Test-Path $f){ $line=Get-Content $f | Where-Object { $_ -match '^TELEGRAM_BOT_TOKEN=' } | Select-Object -First 1; if($line){ $tok=($line -split '=',2)[1] } }; if($tok){ Set-Content -Path $f -Value ('TELEGRAM_BOT_TOKEN='+$tok) -Encoding ASCII; Add-Content -Path $f -Value ('DASHBOARD_URL=%DASHBOARD_URL%') -Encoding ASCII } else { Write-Error 'TELEGRAM_BOT_TOKEN not found in .env' }"
+    powershell -NoProfile -Command "$f='%~dp0.env'; $tok=''; $lines=@(); if(Test-Path $f){ $lines=@(Get-Content $f); foreach($l in $lines){ if($l -match '^TELEGRAM_BOT_TOKEN='){ $tok=($l -split '=',2)[1] } } }; if($tok){ $out=@(); foreach($l in $lines){ if($l -match '^TELEGRAM_BOT_TOKEN=' -or $l -match '^DASHBOARD_URL='){ continue }; $out+=$l }; $out+='TELEGRAM_BOT_TOKEN='+$tok; $out+='DASHBOARD_URL=%DASHBOARD_URL%'; Set-Content -Path $f -Value $out -Encoding ASCII } else { Write-Error 'TELEGRAM_BOT_TOKEN not found in .env' }"
     if errorlevel 1 (
         echo [ERROR] TELEGRAM_BOT_TOKEN not set in .env. Add it before starting.
+        exit /b 1
     )
 )
 
 REM Start Telegram bot
 echo [3/4] Starting Telegram bot...
-start /B /MIN python main.py
+start /B /MIN "" "%PY%" main.py
 timeout /t 2 /nobreak >nul
 
 REM Start dashboard
@@ -53,6 +55,6 @@ echo   Login with your admin credentials
 echo ============================================
 echo.
 
-python webapp.py
+"%PY%" webapp.py
 
 pause

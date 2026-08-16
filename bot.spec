@@ -1,6 +1,8 @@
 # -*- mode: python ; coding: utf-8 -*-
+import os
 from PyInstaller.utils.hooks import collect_all
 
+APP_DIR = os.path.dirname(os.path.abspath(SPECPATH))
 datas = []
 binaries = []
 hiddenimports = ['telegram', 'telegram.ext']
@@ -9,7 +11,7 @@ datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 
 
 a = Analysis(
-    ['C:\\sokchhorn_spare_pc\\main.py'],
+    [os.path.join(APP_DIR, 'main.py')],
     pathex=[],
     binaries=binaries,
     datas=datas,

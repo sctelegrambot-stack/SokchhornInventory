@@ -5,3 +5,6 @@ werkzeug
 openpyxl
 gunicorn
 pywebview
+python-barcode
+fpdf2
+httpx

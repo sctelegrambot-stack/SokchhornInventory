@@ -153,6 +153,13 @@ try:
     conn.execute("ALTER TABLE customer_sales ADD COLUMN created_by TEXT")
 except:
     pass
+conn.execute('''CREATE TABLE IF NOT EXISTS stock_movements (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    item_id INTEGER, item_name TEXT, item_category TEXT,
+    change_type TEXT NOT NULL, qty_before INTEGER DEFAULT 0,
+    qty_change INTEGER DEFAULT 0, qty_after INTEGER DEFAULT 0,
+    price REAL, reference TEXT, created_by TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 # Database indexes for performance
 for idx in [
     "CREATE INDEX IF NOT EXISTS idx_sales_timestamp ON sales(timestamp)",
@@ -190,13 +197,6 @@ if existing:
     ids = [int(x.strip()) for x in existing[0].split(',') if x.strip().isdigit()]
     for cid in ids:
         conn.execute("INSERT OR IGNORE INTO notification_users (chat_id) VALUES (?)", (cid,))
-conn.execute('''CREATE TABLE IF NOT EXISTS stock_movements (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    item_id INTEGER, item_name TEXT, item_category TEXT,
-    change_type TEXT NOT NULL, qty_before INTEGER DEFAULT 0,
-    qty_change INTEGER DEFAULT 0, qty_after INTEGER DEFAULT 0,
-    price REAL, reference TEXT, created_by TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 conn.commit()
 conn.close()
 
@@ -363,7 +363,7 @@ def export_excel(filename, headers, rows, sheet_name='Sheet1'):
 def inject_now():
     staff_list = []
     try:
-        conn = sqlite3.connect(DB)
+        conn = get_db()
         cur = conn.execute("SELECT id, name, role FROM staff ORDER BY name")
         staff_list = cur.fetchall()
         conn.close()
@@ -2051,6 +2051,7 @@ def customer_sellout_complete(cust_id):
     sold = 0
     total_amount = 0
     errors = []
+    failed_ids = []
     sale_ids = []
     for entry in cart:
         try:
@@ -2063,6 +2064,7 @@ def customer_sellout_complete(cust_id):
             stock_row = cur.fetchone()
             if not stock_row or stock_row['quantity'] < qty:
                 errors.append(f'Item #{item_id} ({"insufficient stock" if stock_row else "not found"}): {stock_row["quantity"] if stock_row else 0} left, {qty} requested')
+                failed_ids.append(item_id)
                 continue
             for _ in range(qty):
                 cur = conn.execute(
@@ -2074,7 +2076,7 @@ def customer_sellout_complete(cust_id):
                 conn.execute("UPDATE items SET quantity = quantity - 1 WHERE id = ? AND quantity > 0", (item_id,))
                 if imei:
                     conn.execute("UPDATE item_imeis SET sold = 1 WHERE imei = ?", (imei,))
-            log_stock_movement(conn, item_id, 'sale', -qty, reference=f'customer #{cust_id}', price=price, created_by=session.get('staff_name', ''))
+            log_stock_movement(conn, item_id, 'sale', -qty, qty_before=stock_row['quantity'], qty_after=stock_row['quantity'] - qty, reference=f'customer #{cust_id}', price=price, created_by=session.get('staff_name', ''))
             conn.execute(
                 "INSERT INTO customer_sales (customer_id, item_id, quantity, price_paid, note, sale_date, created_by) VALUES (?,?,?,?,?,DATE('now'), ?)",
                 (cust_id, item_id, qty, price * qty, notes or None, session.get('staff_name', ''))
@@ -2087,10 +2089,15 @@ def customer_sellout_complete(cust_id):
         from datetime import datetime
         import random
         now = datetime.now()
-        receipt_no = f'RCP-{now.strftime("%Y%m%d")}-{now.strftime("%H%M%S")}-{random.randint(100,999)}'
-        cur = conn.execute(
-            "INSERT INTO receipts (receipt_no, customer_id, customer_name, total_amount) VALUES (?,?,?,?)",
-            (receipt_no, cust_id, customer['name'], total_amount))
+        while True:
+            receipt_no = f'RCP-{now.strftime("%Y%m%d")}-{now.strftime("%H%M%S")}-{random.randint(100,999)}'
+            try:
+                cur = conn.execute(
+                    "INSERT INTO receipts (receipt_no, customer_id, customer_name, total_amount) VALUES (?,?,?,?)",
+                    (receipt_no, cust_id, customer['name'], total_amount))
+                break
+            except sqlite3.IntegrityError:
+                continue
         receipt_id = cur.lastrowid
         for sid in sale_ids:
             conn.execute("UPDATE sales SET receipt_id = ? WHERE id = ?", (receipt_id, sid))
@@ -2105,7 +2112,7 @@ def customer_sellout_complete(cust_id):
         conn.execute("UPDATE customers SET credit = credit + ? WHERE id = ?", (total_amount, cust_id))
     conn.commit()
     conn.close()
-    return {'ok': True, 'msg': f'Sold {sold} item(s) to {customer["name"]}, bill due {due_date}', 'sold': sold, 'receipt_id': receipt_id if sold > 0 else 0, 'errors': errors}
+    return {'ok': True, 'msg': f'Sold {sold} item(s) to {customer["name"]}, bill due {due_date}', 'sold': sold, 'receipt_id': receipt_id if sold > 0 else 0, 'errors': errors, 'failed_ids': failed_ids}
 
 @app.route('/sellout/scan', methods=['POST'])
 @login_required
@@ -2158,6 +2165,7 @@ def sellout_complete():
     sold = 0
     total_amt = 0
     errors = []
+    failed_ids = []
     sale_ids = []
     for entry in cart:
         try:
@@ -2171,6 +2179,7 @@ def sellout_complete():
             stock_row = cur.fetchone()
             if not stock_row or stock_row['quantity'] < qty:
                 errors.append(f'Item #{item_id} ({"insufficient stock" if stock_row else "not found"}): {stock_row["quantity"] if stock_row else 0} left, {qty} requested')
+                failed_ids.append(item_id)
                 continue
             for _ in range(qty):
                 cur = conn.execute(
@@ -2182,7 +2191,7 @@ def sellout_complete():
                 conn.execute("UPDATE items SET quantity = quantity - 1 WHERE id = ? AND quantity > 0", (item_id,))
                 if imei:
                     conn.execute("UPDATE item_imeis SET sold = 1 WHERE imei = ?", (imei,))
-            log_stock_movement(conn, item_id, 'sale', -qty, reference='sellout', price=price, created_by=session.get('staff_name', ''))
+            log_stock_movement(conn, item_id, 'sale', -qty, qty_before=stock_row['quantity'], qty_after=stock_row['quantity'] - qty, reference='sellout', price=price, created_by=session.get('staff_name', ''))
             sold += qty
             total_amt += (price + delivery) * qty
         except Exception as e:
@@ -2191,16 +2200,21 @@ def sellout_complete():
         from datetime import datetime
         import random
         now = datetime.now()
-        receipt_no = f'RCP-{now.strftime("%Y%m%d")}-{now.strftime("%H%M%S")}-{random.randint(100,999)}'
-        cur = conn.execute(
-            "INSERT INTO receipts (receipt_no, total_amount) VALUES (?,?)",
-            (receipt_no, total_amt))
+        while True:
+            receipt_no = f'RCP-{now.strftime("%Y%m%d")}-{now.strftime("%H%M%S")}-{random.randint(100,999)}'
+            try:
+                cur = conn.execute(
+                    "INSERT INTO receipts (receipt_no, total_amount) VALUES (?,?)",
+                    (receipt_no, total_amt))
+                break
+            except sqlite3.IntegrityError:
+                continue
         receipt_id = cur.lastrowid
         for sid in sale_ids:
             conn.execute("UPDATE sales SET receipt_id = ? WHERE id = ?", (receipt_id, sid))
     conn.commit()
     conn.close()
-    return {'ok': True, 'msg': f'Sold {sold} item(s)', 'sold': sold, 'receipt_id': receipt_id if sold > 0 else 0, 'errors': errors}
+    return {'ok': True, 'msg': f'Sold {sold} item(s)', 'sold': sold, 'receipt_id': receipt_id if sold > 0 else 0, 'errors': errors, 'failed_ids': failed_ids}
 
 @app.route('/receipt/<int:receipt_id>')
 @login_required
@@ -2292,6 +2306,10 @@ def delete_sale(sale_id):
     if not sale:
         conn.close()
         flash('Sale not found', 'danger')
+        return redirect(url_for('sales'))
+    if sale['returned']:
+        conn.close()
+        flash('Sale already returned — delete not allowed', 'warning')
         return redirect(url_for('sales'))
     item_id = sale['item_id']
     qty = sale['quantity'] or 1

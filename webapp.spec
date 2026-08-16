@@ -1,7 +1,9 @@
 # -*- mode: python ; coding: utf-8 -*-
+import os
 from PyInstaller.utils.hooks import collect_all
 
-datas = [('C:\\sokchhorn_spare_pc\\templates', 'templates'), ('C:\\sokchhorn_spare_pc\\app.ico', '.')]
+APP_DIR = os.path.dirname(os.path.abspath(SPECPATH))
+datas = [(os.path.join(APP_DIR, 'templates'), 'templates'), (os.path.join(APP_DIR, 'app.ico'), '.')]
 binaries = []
 hiddenimports = ['openpyxl', 'openpyxl.styles', 'openpyxl.worksheet.datavalidation', 'barcode', 'barcode.writer', 'werkzeug.security', 'flask']
 tmp_ret = collect_all('flask')
@@ -9,7 +11,7 @@ datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 
 
 a = Analysis(
-    ['C:\\sokchhorn_spare_pc\\webapp.py'],
+    [os.path.join(APP_DIR, 'webapp.py')],
     pathex=[],
     binaries=binaries,
     datas=datas,

@@ -27,6 +27,7 @@
       <h4 class="mb-3">Scan Barcode</h4>
       <p class="text-muted mb-4">Scan a product code or IMEI barcode</p>
       <form method="POST" id="scanForm">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <input type="text" name="value" id="scanInput" class="form-control" autofocus
                placeholder="Scan here..." autocomplete="off">
       </form>

@@ -81,6 +81,7 @@ function doScan(code) {
   fb.innerHTML = '<span class="text-muted">Scanning...</span>';
   var form = new FormData();
   form.append('code', code);
+  form.append('csrf_token', CSRF_TOKEN);
   fetch('/sellout/scan', { method:'POST', body:form, headers:{'X-Requested-With':'XMLHttpRequest'} })
     .then(function(r) { return r.json(); })
     .then(function(d) {
@@ -210,12 +211,13 @@ function completeSale() {
   .then(function(r) { return r.json(); })
   .then(function(d) {
     if (d.ok) {
-      cart = [];
-      renderCart();
       if (d.receipt_id) {
+        cart = cart.filter(function(c){ return d.failed_ids && d.failed_ids.indexOf(c.id) >= 0; });
+        renderCart();
+        if (d.errors && d.errors.length) alert('Some items were skipped:\n'+d.errors.join('\n'));
         window.location.href = '/receipt/' + d.receipt_id;
       } else {
-        alert(d.msg);
+        alert(d.msg + (d.errors && d.errors.length ? '\n\n'+d.errors.join('\n') : ''));
         document.getElementById('scanInput').focus();
       }
     } else {

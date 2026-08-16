@@ -5,30 +5,43 @@ echo ============================================
 echo   Sokchhorn Inventory Bot - Spare PC Setup
 echo ============================================
 echo.
-echo Step 1: Installing Python packages...
-pip install -r requirements.txt
+echo Step 1: Creating virtual environment...
+if exist venv\Scripts\python.exe (
+    echo [OK] venv already exists.
+) else (
+    python -m venv venv
+    if %errorlevel% neq 0 (
+        echo [ERROR] Could not create venv. Make sure Python is installed.
+        pause
+        exit /b 1
+    )
+    echo [OK] venv created.
+)
+echo.
+echo Step 2: Installing Python packages...
+venv\Scripts\python.exe -m pip install --upgrade pip
+venv\Scripts\python.exe -m pip install -r requirements.txt
 if %errorlevel% neq 0 (
-    echo [ERROR] pip install failed. Make sure Python is installed.
+    echo [ERROR] pip install failed. Check your internet connection.
     pause
     exit /b 1
 )
 echo [OK] Packages installed.
 echo.
-echo Step 2: Creating exports folder...
+echo Step 3: Creating exports folder...
 if not exist exports mkdir exports
 echo [OK] Exports folder ready.
 echo.
-echo Step 3: Checking TELEGRAM_BOT_TOKEN...
+echo Step 4: Checking TELEGRAM_BOT_TOKEN...
 if not exist .env (
-    echo [WARN] No .env file found. Create one with:
+    echo [WARN] No .env file found. Copy .env from the main PC or create one with:
     echo   TELEGRAM_BOT_TOKEN=your_token_here
     echo   DASHBOARD_URL=http://localhost:5000
-    echo   Or copy from .env.example
 ) else (
     echo [OK] .env file found.
 )
 echo.
-echo Step 4: Downloading ngrok...
+echo Step 5: Downloading ngrok...
 where ngrok >nul 2>nul
 if %errorlevel% equ 0 (
     echo [OK] ngrok already installed.
@@ -38,7 +51,7 @@ if %errorlevel% equ 0 (
     echo [OK] ngrok downloaded to project folder.
 )
 echo.
-echo Step 5: Configuring ngrok authtoken...
+echo Step 6: Configuring ngrok authtoken...
 set NGROK_AUTHTOKEN=
 set /p NGROK_AUTHTOKEN=Enter your ngrok authtoken (https://dashboard.ngrok.com/get-started/your-authtoken) or press Enter to skip: 
 if not "%NGROK_AUTHTOKEN%"=="" (

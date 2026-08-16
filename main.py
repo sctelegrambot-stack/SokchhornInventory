@@ -41,7 +41,7 @@ async def guard_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     chat_id = update.effective_chat.id
     await query.answer(text=_('msg_type_instead', chat_id), show_alert=True)
-    return context.user_data.get('conv_state', ConversationHandler.END)
+    return None
 
 def escape_md(text):
     if text is None: return ''
@@ -726,9 +726,9 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 any_data = True
                 phones = ' / '.join(filter(None, [c[2], c[3], c[4]]))
                 safe_name = escape_md(c[1])
-                resp += f"\n{'─'*20}\n👤 {safe_name} | Bal: ${c[5]:.2f}\n📞 {phones or '—'}\n"
+                resp += f"\n{'─'*20}\n👤 {safe_name} | Bal: ${c[5]:.2f}\n📞 {escape_md(phones) or '—'}\n"
                 for b in bills:
-                    resp += f"  🔴 ${b[1]:.0f} (Due: {b[2]}) {b[3] or ''}\n"
+                    resp += f"  🔴 ${b[1]:.0f} (Due: {b[2]}) {escape_md(b[3]) or ''}\n"
         if not any_data:
             resp += _('msg_no_outstanding', chat_id)
         await query.edit_message_text(resp, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(_('btn_back', chat_id), callback_data="menu_customers")]]), parse_mode='Markdown')
@@ -777,7 +777,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text(_f('msg_no_items_brand', chat_id, brand=brand), reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(_('btn_back', chat_id), callback_data="inv_list_brand")]]))
             return
         owner = is_owner(context)
-        resp = _f('report_inv_brand', chat_id, brand=brand) + "\n"
+        resp = _f('report_inv_brand', chat_id, brand=escape_md(brand)) + "\n"
         total_inv = 0
         for i in items:
             spec = f" {i[6]}/{i[7]}" if i[6] or i[7] else ''
@@ -807,7 +807,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         resp = _('report_brands', chat_id) + "\n"
         for b in brands:
-            resp += f"ID:{b[0]} {b[3]}{b[2]} {b[1]}\n"
+            resp += f"ID:{b[0]} {b[3]}{b[2]} {escape_md(b[1])}\n"
         resp += "\nTap below to add a brand:"
         await query.edit_message_text(resp, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(_('btn_add_brand', chat_id), callback_data="inv_add_brand")], [InlineKeyboardButton(_('btn_back', chat_id), callback_data="menu_inventory")]]), parse_mode='Markdown')
 
@@ -897,6 +897,7 @@ async def sell(update: Update, context: ContextTypes.DEFAULT_TYPE):
         item = Database.get_item(int(args[0]))
         if not item: await update.message.reply_text("Item not found"); return
         qty = int(args[1])
+        if qty <= 0: await update.message.reply_text("❌ Quantity must be positive."); return
         if item[3] < qty: await update.message.reply_text(f"Insufficient stock. Available: {item[3]}"); return
         Database.update_item_quantity(item[0], -qty)
         Database.record_sale(item[0], item[2], qty)
@@ -1146,7 +1147,7 @@ async def get_sel_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['sel_item_id'] = item[0]
         context.user_data['sel_item_name'] = item[1]
         context.user_data['sel_item_brand'] = item[2]
-        context.user_data['sel_retail'] = item[4]
+        context.user_data['sel_retail'] = item[4] or 0
         context.user_data['sel_cost'] = item[8] or 0
         context.user_data['sel_group'] = item[5] or item[2]
         spec = f" ({item[6]}/{item[7]})" if item[6] or item[7] else ''
@@ -1408,7 +1409,7 @@ async def get_stk_item(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
     name = item[1]
     brand = item[2]
-    retail = item[4]
+    retail = item[4] or 0
     qty = item[3]
     cost = item[8] or 0
     spec = f" ({item[6]}/{item[7]})" if item[6] or item[7] else ''
@@ -1623,7 +1624,7 @@ async def get_ip_qty(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     try:
         qty = int(update.message.text)
-        if qty < 0:
+        if qty <= 0:
             await update.message.reply_text(_('msg_invalid_qty', chat_id))
             return IP_QTY
         context.user_data['ip_qty'] = qty
@@ -1657,7 +1658,7 @@ async def get_ip_dup_qty(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     try:
         qty = int(update.message.text)
-        if qty < 0: raise ValueError
+        if qty <= 0: raise ValueError
     except:
         await update.message.reply_text(_('msg_invalid_qty', chat_id))
         return IP_DUP_QTY
@@ -2079,6 +2080,7 @@ async def get_debt_amt(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     try:
         context.user_data['debt_amt'] = float(update.message.text)
+        if context.user_data['debt_amt'] <= 0: raise ValueError
     except:
         await update.message.reply_text(_('msg_invalid_number', chat_id)); return DEBT_AMT
     keyboard = [
@@ -2291,7 +2293,7 @@ async def get_hist_cust(update: Update, context: ContextTypes.DEFAULT_TYPE):
     resp = f"📖 *History:*\n"
     for t in txns:
         tp = "🔴 DEBT" if t[2] > 0 else "🟢 PAYMENT"
-        resp += f"{t[1][:10]} {tp} ${abs(t[2]):.2f}\n{t[3] or ''}\n"
+        resp += f"{t[1][:10]} {tp} ${abs(t[2]):.2f}\n{escape_md(t[3]) or ''}\n"
     await query.edit_message_text(resp, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(_('btn_back', chat_id), callback_data="menu_customers")]]), parse_mode='Markdown')
     clear_user_data(context)
     return ConversationHandler.END
@@ -2455,6 +2457,7 @@ async def get_csr_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     try:
         price = float(update.message.text)
+        if price <= 0: raise ValueError
         context.user_data['csr_item_price'] = price
     except:
         await update.message.reply_text(_('msg_invalid_price', chat_id))
@@ -2610,14 +2613,14 @@ async def check_bill_alerts(context: ContextTypes.DEFAULT_TYPE):
         if overdue:
             lines.append(f"🔴 *Overdue Bills* ({len(overdue)})")
             for b in overdue[:5]:
-                lines.append(f"• {b['customer_name']} — ${b['amount']:.0f} (due {b['due_date']})")
+                lines.append(f"• {escape_md(b['customer_name'])} — ${b['amount']:.0f} (due {b['due_date']})")
             if len(overdue) > 5:
                 lines.append(f"  ... and {len(overdue)-5} more")
             lines.append("")
         if bills:
             lines.append(f"⚠️ *Upcoming Bills* (within {bill_days}d)")
             for b in bills[:5]:
-                lines.append(f"• {b['customer_name']} — ${b['amount']:.0f} (due {b['due_date']})")
+                lines.append(f"• {escape_md(b['customer_name'])} — ${b['amount']:.0f} (due {b['due_date']})")
             if len(bills) > 5:
                 lines.append(f"  ... and {len(bills)-5} more")
         msg = "\n".join(lines)
@@ -2696,7 +2699,7 @@ async def send_import_alert(context: ContextTypes.DEFAULT_TYPE, item_name, brand
             conn.close(); return
         target_ids = [r[0] for r in conn.execute("SELECT chat_id FROM notification_users WHERE import_alerts=1 AND active=1").fetchall()]
         conn.close()
-        msg = f"📦 *New Stock Added*\n{brand} {item_name}\n+{qty} units{note}"
+        msg = f"📦 *New Stock Added*\n{escape_md(brand)} {escape_md(item_name)}\n+{qty} units{escape_md(note)}"
         for cid in target_ids:
             try:
                 await context.application.bot.send_message(cid, msg, parse_mode='Markdown')
