@@ -99,7 +99,7 @@
 let cart = [];
 let allProducts = [
   {% for p in products %}
-  {id: {{ p.id }}, name: '{{ p.name|replace("'","\\'") }}', brand: '{{ p.category|replace("'","\\'") }}', price: {{ p.price or 0 }}}{% if not loop.last %},{% endif %}
+  {id: {{ p.id }}, name: {{ p.name|tojson }}, brand: {{ p.category|tojson }}, price: {{ p.price or 0 }}}{% if not loop.last %},{% endif %}
   {% endfor %}
 ];
 

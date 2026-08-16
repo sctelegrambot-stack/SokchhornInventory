@@ -1,4 +1,5 @@
 import sqlite3
+import html
 import sys, os, io, json, secrets
 from datetime import datetime, date, timedelta
 import openpyxl
@@ -689,6 +690,7 @@ def dashboard():
     cur = conn.execute('''SELECT s.id, i.name as item_name, s.quantity,
         s.timestamp, COALESCE(CAST(NULLIF(s.sellout_price,'') AS REAL), i.price) as price, i.cost_price
         FROM sales s JOIN items i ON s.item_id = i.id
+        WHERE s.returned = 0
         ORDER BY s.timestamp DESC LIMIT 10''')
     stats['recent_sales'] = cur.fetchall()
 
@@ -722,7 +724,7 @@ def dashboard():
     cur = conn.execute('''SELECT DATE(s.timestamp) as day, SUM(s.quantity) as qty,
         COALESCE(SUM(CAST(NULLIF(s.sellout_price,'') AS REAL)), SUM(i.price * s.quantity)) as rev
         FROM sales s JOIN items i ON s.item_id = i.id
-        WHERE DATE(s.timestamp) >= ? AND DATE(s.timestamp) <= ?
+        WHERE s.returned = 0 AND DATE(s.timestamp) >= ? AND DATE(s.timestamp) <= ?
         GROUP BY day ORDER BY day''', (from_date, to_date))
     sellout_data = cur.fetchall()
     stats['sellout_dates'] = [r['day'] for r in sellout_data]
@@ -961,7 +963,7 @@ def delete_item(item_id):
     conn.execute("DELETE FROM items WHERE id = ?", (item_id,))
     conn.commit()
     conn.close()
-    return {'ok': True, 'msg': f'"{item["name"]}" deleted'}
+    return {'ok': True, 'msg': f'"{html.escape(item["name"])}" deleted'}
 
 @app.route('/inventory/<int:item_id>', methods=['GET', 'POST'])
 @login_required
@@ -1191,11 +1193,11 @@ def sales():
     sales = cur.fetchall()
     cur = conn.execute('''SELECT COALESCE(SUM(s.quantity * COALESCE(CAST(NULLIF(s.sellout_price,'') AS REAL), i.price)),0)
                           FROM sales s JOIN items i ON s.item_id = i.id
-                          WHERE DATE(s.timestamp) >= ?''', (start,))
+                          WHERE s.returned = 0 AND DATE(s.timestamp) >= ?''', (start,))
     total_revenue = cur.fetchone()[0]
     cur = conn.execute('''SELECT COALESCE(SUM(s.quantity * (COALESCE(CAST(NULLIF(s.sellout_price,'') AS REAL), i.price) - i.cost_price)),0)
                           FROM sales s JOIN items i ON s.item_id = i.id
-                          WHERE DATE(s.timestamp) >= ? AND i.cost_price IS NOT NULL''', (start,))
+                          WHERE s.returned = 0 AND DATE(s.timestamp) >= ? AND i.cost_price IS NOT NULL''', (start,))
     total_profit = cur.fetchone()[0]
     conn.close()
     return render_template('sales.html', sales=sales, total_revenue=total_revenue,
@@ -2060,6 +2062,10 @@ def customer_sellout_complete(cust_id):
             price = float(entry.get('price', 0))
             delivery = float(entry.get('delivery', 0))
             imei = entry.get('imei', '')
+            if qty < 1 or price < 0 or delivery < 0:
+                errors.append(f'Item #{item_id}: invalid qty/price/delivery')
+                failed_ids.append(item_id)
+                continue
             cur = conn.execute("SELECT name, quantity FROM items WHERE id = ?", (item_id,))
             stock_row = cur.fetchone()
             if not stock_row or stock_row['quantity'] < qty:
@@ -2175,6 +2181,10 @@ def sellout_complete():
             delivery = float(entry.get('delivery', 0))
             note = entry.get('note', '')
             imei = entry.get('imei', '')
+            if qty < 1 or price < 0 or delivery < 0:
+                errors.append(f'Item #{item_id}: invalid qty/price/delivery')
+                failed_ids.append(item_id)
+                continue
             cur = conn.execute("SELECT name, quantity FROM items WHERE id = ?", (item_id,))
             stock_row = cur.fetchone()
             if not stock_row or stock_row['quantity'] < qty:
@@ -2378,6 +2388,12 @@ def edit_sale(sale_id):
         (str(new_price), str(new_delivery), new_note, new_qty, sale_id)
     )
     if diff > 0:
+        cur = conn.execute("SELECT quantity FROM items WHERE id = ?", (sale['item_id'],))
+        row = cur.fetchone()
+        if not row or (row['quantity'] or 0) < diff:
+            conn.close()
+            flash(f'Not enough stock to increase sale #{sale_id} by {diff}', 'danger')
+            return redirect(url_for('sales'))
         conn.execute("UPDATE items SET quantity = quantity - ? WHERE id = ?", (diff, sale['item_id']))
         log_stock_movement(conn, sale['item_id'], 'adjustment', -diff, reference=f'sale #{sale_id} qty edited')
     elif diff < 0:

@@ -2,7 +2,7 @@
 import os
 from PyInstaller.utils.hooks import collect_all
 
-APP_DIR = os.path.dirname(os.path.abspath(SPECPATH))
+APP_DIR = os.path.abspath(SPECPATH)
 datas = []
 binaries = []
 hiddenimports = ['telegram', 'telegram.ext']

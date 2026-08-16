@@ -10,7 +10,7 @@ if exist venv\Scripts\python.exe (
     echo [OK] venv already exists.
 ) else (
     python -m venv venv
-    if %errorlevel% neq 0 (
+    if not exist "%~dp0venv\Scripts\python.exe" (
         echo [ERROR] Could not create venv. Make sure Python is installed.
         pause
         exit /b 1

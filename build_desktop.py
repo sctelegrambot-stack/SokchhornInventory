@@ -1,4 +1,4 @@
-import os, shutil, site
+import os, shutil
 import subprocess, sys
 
 BASE = os.path.dirname(os.path.abspath(__file__))
@@ -23,13 +23,14 @@ cmd = [
     '--hidden-import', 'httpx',
     os.path.join(BASE, 'desktop_app.py'),
 ]
-subprocess.check_call(' '.join(cmd), shell=True, cwd=BASE)
+subprocess.check_call(cmd, cwd=BASE)
 for spec in ('webapp.spec', 'bot.spec'):
-    subprocess.check_call(' '.join([
+    spec_cmd = [
         sys.executable, '-m', 'PyInstaller', '--noconfirm',
         '--distpath', DIST, '--workpath', os.path.join(BASE, 'build'),
         os.path.join(BASE, spec),
-    ]), shell=True, cwd=BASE)
+    ]
+    subprocess.check_call(spec_cmd, cwd=BASE)
 for asset in ('.env', 'inventory.db'):
     src = os.path.join(BASE, asset)
     if os.path.exists(src):

@@ -8,3 +8,4 @@ pywebview
 python-barcode
 fpdf2
 httpx
+pyinstaller

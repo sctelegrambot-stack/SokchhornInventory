@@ -330,7 +330,9 @@ class Database:
         conn = sqlite3.connect(DB_PATH); c = conn.cursor()
         c.execute("INSERT INTO items (name,category,quantity,price,group_name,ram,rom,cost_price,product_code) VALUES (?,?,?,?,?,?,?,?,?)",
                   (name,category,quantity,price,group_name,ram,rom,cost_price,product_code))
+        last_id = c.lastrowid
         conn.commit(); conn.close()
+        return last_id
     @staticmethod
     def update_item_quantity(item_id, change, cost_price=None):
         conn = sqlite3.connect(DB_PATH); c = conn.cursor()
@@ -853,7 +855,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for c in custs:
             phones = ' / '.join(filter(None, [c[2], c[3], c[4]]))
             safe_name = escape_md(c[1])
-            resp += f"ID:{c[0]} {safe_name} {c[6] or ''} {phones or 'N/A'} Balance:${c[5]:.2f}\n"
+            resp += f"ID:{c[0]} {safe_name} {escape_md(c[6] or '')} {escape_md(phones) if phones else 'N/A'} Balance:${c[5]:.2f}\n"
         await query.edit_message_text(resp, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(_('btn_back', chat_id), callback_data="menu_customers")]]), parse_mode='Markdown')
 
     elif data == "cust_payment_report":
@@ -939,6 +941,9 @@ async def add_brand(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     try:
         name = context.args[0]; emoji = context.args[1]
+        if len(name) > 40:
+            await update.message.reply_text("Brand name too long (max 40 characters).")
+            return
         color = context.args[2] if len(context.args) > 2 else '⚪'
         Database.add_brand(name, emoji, color)
         await update.message.reply_text(f"Brand added: {color}{emoji} {name}")
@@ -1035,6 +1040,7 @@ async def get_add_qty(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     try:
         qty = int(update.message.text)
+        if qty <= 0: raise ValueError
         context.user_data['item_qty'] = qty
         await update.message.reply_text(_('prompt_enter_sellin_price', chat_id))
         return ADD_PRICE
@@ -1050,6 +1056,7 @@ async def get_add_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if text.lower() != 'skip':
         try:
             price = float(text)
+            if price <= 0: raise ValueError
         except:
             await update.message.reply_text(_('msg_invalid_price_skip', chat_id))
             return ADD_PRICE
@@ -1220,6 +1227,7 @@ async def get_sel_fee(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     try:
         fee = float(update.message.text)
+        if fee < 0: raise ValueError
         context.user_data['sel_fee'] = fee
         await update.message.reply_text("📝 Enter special note (or type 'skip'):")
         return SEL_NOTE
@@ -1451,6 +1459,9 @@ async def start_add_brand(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def get_brd_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['conv_state'] = BRD_NAME
     chat_id = update.effective_chat.id
+    if len(update.message.text) > 40:
+        await update.message.reply_text("❌ Brand name too long (max 40 characters). Enter a shorter name:")
+        return BRD_NAME
     context.user_data['brd_name'] = update.message.text
     await update.message.reply_text(_('prompt_enter_emoji', chat_id),
         reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(_('btn_cancel', chat_id), callback_data="menu_inventory")]]))
@@ -1560,6 +1571,7 @@ async def get_ip_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     try:
         retail = float(update.message.text)
+        if retail <= 0: raise ValueError
     except:
         await update.message.reply_text(_('msg_invalid_price', chat_id))
         return IP_PRICE
@@ -1682,9 +1694,9 @@ async def get_ip_imei(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if context.user_data.get('ip_is_new'):
             await finish_import_product(update.message, context, chat_id, qty)
             if imeis:
-                existing = Database.find_item(brand, name, ram, rom)
-                if existing:
-                    Database.save_item_imeis(existing[0], imeis)
+                new_id = context.user_data.get('ip_item_id')
+                if new_id:
+                    Database.save_item_imeis(new_id, imeis)
                     await update.message.reply_text(f"📱 {len(imeis)} IMEI(s) registered.")
         else:
             existing = Database.find_item(brand, name, ram, rom)
@@ -1736,7 +1748,8 @@ async def finish_import_product(query_or_msg, context, chat_id, qty=0):
     rom = context.user_data.get('ip_rom', '')
     retail = context.user_data['ip_retail']
     code = context.user_data.get('ip_code', '')
-    Database.add_item(name, brand, qty, price=retail, group_name=group, ram=ram, rom=rom, product_code=code)
+    new_id = Database.add_item(name, brand, qty, price=retail, group_name=group, ram=ram, rom=rom, product_code=code)
+    context.user_data['ip_item_id'] = new_id
     disp = Database.get_brand_display(brand)
     spec = f" {ram}/{rom}" if ram or rom else ''
     code_line = f"\n🔤 Code: {code}" if code else ''

@@ -2,7 +2,7 @@
 import os
 from PyInstaller.utils.hooks import collect_all
 
-APP_DIR = os.path.dirname(os.path.abspath(SPECPATH))
+APP_DIR = os.path.abspath(SPECPATH)
 datas = [(os.path.join(APP_DIR, 'templates'), 'templates'), (os.path.join(APP_DIR, 'app.ico'), '.')]
 binaries = []
 hiddenimports = ['openpyxl', 'openpyxl.styles', 'openpyxl.worksheet.datavalidation', 'barcode', 'barcode.writer', 'werkzeug.security', 'flask']
