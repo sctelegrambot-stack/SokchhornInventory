@@ -13,7 +13,7 @@
                 <tbody>
                     {% for f in files %}
                     <tr>
-                        <td><a href="{{ url_for('export_inventory') }}?file={{ f.name }}" class="text-decoration-none"><i class="bi bi-file-earmark-excel text-success"></i> {{ f.name }}</a></td>
+                        <td><a href="{{ url_for('export_download', filename=f.name) }}" class="text-decoration-none"><i class="bi bi-file-earmark-excel text-success"></i> {{ f.name }}</a></td>
                         <td>
                             {% if f.size < 1024 %}
                                 {{ f.size }} B

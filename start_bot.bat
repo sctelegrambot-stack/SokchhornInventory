@@ -19,7 +19,7 @@ timeout /t 5 /nobreak >nul
 REM Fetch URL from ngrok API
 echo [2/4] Getting public URL...
 set DASHBOARD_URL=
-for /f "tokens=*" %%a in ('powershell -Command "try{ $d=curl -s http://127.0.0.1:4040/api/tunnels; $m=[regex]::Match($d,'https://[a-z0-9-]+\.ngrok-free\.(app|dev)'); if($m.Success){ $m.Value } else { '' } } catch{ '' }"') do set DASHBOARD_URL=%%a
+for /f "tokens=*" %%a in ('powershell -Command "try{ $d=curl.exe -s http://127.0.0.1:4040/api/tunnels; $m=[regex]::Match($d,'https://[a-z0-9-]+\.ngrok-free\.(app|dev)'); if($m.Success){ $m.Value } else { '' } } catch{ '' }"') do set DASHBOARD_URL=%%a
 
 if "%DASHBOARD_URL%"=="" (
     echo [WARN] Could not detect ngrok URL. Check the ngrok window.
@@ -49,7 +49,7 @@ if "%DASHBOARD_URL%"=="" (
     echo   %DASHBOARD_URL%
 )
 echo.
-echo   Login: admin@sokchhorn / 1234
+echo   Login with your admin credentials
 echo ============================================
 echo.
 

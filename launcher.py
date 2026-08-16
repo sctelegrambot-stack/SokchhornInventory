@@ -8,9 +8,9 @@ import urllib.request
 import urllib.error
 import json
 
-PROJECT_DIR = r"C:\sokchhorn_spare_pc"
+PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 PYTHON = os.path.join(PROJECT_DIR, "venv", "Scripts", "python.exe")
-NGROK = os.path.join(os.environ.get("TEMP", "C:\\Temp"), "opencode", "ngrok.exe")
+NGROK = os.path.join(PROJECT_DIR, "ngrok.exe")
 ENV_FILE = os.path.join(PROJECT_DIR, ".env")
 
 def read_env_token():
@@ -31,7 +31,7 @@ def message_box(title, text):
 def find_ngrok():
     for candidate in [
         NGROK,
-        r"C:\Users\SOKCHHORN PC\AppData\Local\Microsoft\WindowsApps\ngrok.exe",
+        os.path.join(os.environ.get("LOCALAPPDATA", ""), "Microsoft", "WindowsApps", "ngrok.exe"),
     ]:
         if os.path.exists(candidate):
             return candidate
@@ -50,9 +50,24 @@ def get_ngrok_url():
     return None
 
 def write_env(token, url):
+    header = []
+    lines = {}
+    if os.path.exists(ENV_FILE):
+        with open(ENV_FILE) as f:
+            for line in f:
+                stripped = line.strip()
+                if stripped and '=' in stripped and not stripped.startswith('#'):
+                    k, v = stripped.split('=', 1)
+                    lines[k.strip()] = v
+                elif stripped:
+                    header.append(stripped)
+    lines['TELEGRAM_BOT_TOKEN'] = token
+    lines['DASHBOARD_URL'] = url
     with open(ENV_FILE, "w") as f:
-        f.write(f"TELEGRAM_BOT_TOKEN={token}\n")
-        f.write(f"DASHBOARD_URL={url}\n")
+        for h in header:
+            f.write(h + "\n")
+        for k, v in lines.items():
+            f.write(f"{k}={v}\n")
 
 def start_process(script_name):
     script = os.path.join(PROJECT_DIR, script_name)
@@ -91,19 +106,26 @@ def main():
 
     # Start ngrok tunnel
     ngrok_exe = find_ngrok()
-    subprocess.Popen(
-        [ngrok_exe, "http", "5000"],
-        cwd=PROJECT_DIR,
-        creationflags=subprocess.CREATE_NO_WINDOW,
-    )
+    try:
+        subprocess.Popen(
+            [ngrok_exe, "http", "5000"],
+            cwd=PROJECT_DIR,
+            creationflags=subprocess.CREATE_NO_WINDOW,
+        )
+    except FileNotFoundError:
+        message_box("Inventory Bot",
+                    "ngrok.exe not found.\n\n"
+                    "Run setup_spare_pc.bat to install ngrok, or place ngrok.exe in the project folder.")
+        ngrok_exe = None
 
     # Wait for ngrok URL (up to 60s, retry every 2s)
     url = None
-    for _ in range(30):
-        time.sleep(2)
-        url = get_ngrok_url()
-        if url:
-            break
+    if ngrok_exe is not None:
+        for _ in range(30):
+            time.sleep(2)
+            url = get_ngrok_url()
+            if url:
+                break
 
     if url:
         token = read_env_token()

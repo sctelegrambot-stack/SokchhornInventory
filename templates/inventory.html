@@ -206,7 +206,7 @@ document.getElementById('deleteConfirmInput').addEventListener('input', function
 });
 document.getElementById('deleteConfirmBtn').addEventListener('click', function() {
   var id = document.getElementById('deleteItemId').value;
-  fetch('/inventory/delete/' + id, { method: 'POST' })
+  fetch('/inventory/delete/' + id, { method: 'POST', headers:{'X-CSRF-Token': CSRF_TOKEN} })
     .then(function(r) { return r.json(); })
     .then(function(d) {
       bootstrap.Modal.getInstance(document.getElementById('deleteModal')).hide();

@@ -1,4 +1,5 @@
 import os, shutil, site
+import subprocess, sys
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 DIST = os.path.join(BASE, 'dist')
@@ -22,7 +23,9 @@ cmd = [
     '--hidden-import', 'httpx',
     os.path.join(BASE, 'desktop_app.py'),
 ]
-
-import subprocess, sys
 subprocess.check_call(' '.join(cmd), shell=True, cwd=BASE)
+for asset in ('.env', 'inventory.db'):
+    src = os.path.join(BASE, asset)
+    if os.path.exists(src):
+        shutil.copy2(src, os.path.join(DIST, asset))
 print(f'\nBuild complete: {os.path.join(DIST, "InventoryBot.exe")}')

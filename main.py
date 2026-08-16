@@ -4,6 +4,7 @@ import json
 import os
 import time
 import asyncio
+from functools import wraps
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -54,6 +55,23 @@ def is_owner(context):
 
 def is_staff(context):
     return False
+
+def check_access(update, context):
+    uid = update.effective_user.id
+    if uid in ADMIN_IDS:
+        context.user_data['unlocked'] = True
+        return True
+    return bool(context.user_data.get('unlocked'))
+
+def require_access(func):
+    @wraps(func)
+    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        if not check_access(update, context):
+            context.user_data['awaiting_unlock'] = True
+            await update.message.reply_text("🔒 Enter unlock PIN to access the bot.\nUse /start, enter the PIN, then try again.")
+            return
+        return await func(update, context)
+    return wrapper
 
 def _(key, chat_id=None, lang=None):
     if lang is None and chat_id is not None:
@@ -396,6 +414,7 @@ class Database:
         if category: conds.append("s.category=?"); params.append(category)
         if start_date and end_date: conds.append("s.timestamp BETWEEN ? AND ?"); params.extend([start_date,end_date])
         if conds: q += " WHERE " + " AND ".join(conds)
+        q += " ORDER BY s.id DESC"
         c.execute(q, params); rows = c.fetchall(); conn.close(); return rows
     @staticmethod
     def add_customer(name, location=None, phone=None, phone2=None, phone3=None):
@@ -525,6 +544,13 @@ class Database:
         c.execute("""SELECT ps.id,c.id,c.name,ps.amount,ps.due_date,ps.status
                      FROM payment_schedules ps JOIN customers c ON ps.customer_id=c.id
                      WHERE ps.status='pending' ORDER BY ps.due_date ASC""")
+        rows = c.fetchall(); conn.close(); return rows
+    @staticmethod
+    def get_paid_report():
+        conn = sqlite3.connect(DB_PATH); c = conn.cursor()
+        c.execute("""SELECT ps.id,c.id,c.name,ps.amount,ps.due_date,ps.status
+                     FROM payment_schedules ps JOIN customers c ON ps.customer_id=c.id
+                     WHERE ps.status='paid' ORDER BY ps.due_date DESC LIMIT 5""")
         rows = c.fetchall(); conn.close(); return rows
     @staticmethod
     def get_customer_schedules(customer_id):
@@ -669,8 +695,11 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "menu_customers":
         keyboard = [
             [InlineKeyboardButton(_('btn_create_customer', chat_id), callback_data="import_customer")],
+            [InlineKeyboardButton(_('btn_cust_balance', chat_id), callback_data="cust_balance")],
             [InlineKeyboardButton(_('btn_cust_buy_record', chat_id), callback_data="cust_buy_record")],
-            [InlineKeyboardButton(_('btn_cust_payback', chat_id), callback_data="cust_payment")],
+            [InlineKeyboardButton(_('btn_cust_history', chat_id), callback_data="cust_history")],
+            [InlineKeyboardButton(_('btn_cust_debt', chat_id), callback_data="cust_debt")],
+            [InlineKeyboardButton(_('btn_cust_payment', chat_id), callback_data="cust_payment")],
             [InlineKeyboardButton(_('btn_cust_report', chat_id), callback_data="cust_report")],
             [InlineKeyboardButton(_('btn_back', chat_id), callback_data="menu_main")],
         ]
@@ -794,7 +823,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not sales:
             await query.edit_message_text(_('msg_no_sales', chat_id), reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(_('btn_back', chat_id), callback_data="menu_sellout")]]))
             return
-        show_owner = True
+        show_owner = is_owner(context)
         resp = _('report_sales', chat_id) + "\n"
         ts = 0; tr = 0; tp = 0
         for s in sales[:10]:
@@ -804,8 +833,8 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             cost = s[7] or 0
             profit = (sellout - fee) - cost * s[3]
             imei = s[8] or ''
-            line = f"{s[0][:10]} {s[1]} x{s[3]} Sell:${sellout:.0f}"
-            if imei: line += f" IMEI:{imei}"
+            line = f"{s[0][:10]} {escape_md(s[1])} x{s[3]} Sell:${sellout:.0f}"
+            if imei: line += f" IMEI:{escape_md(imei)}"
             if show_owner: line += f" Profit:${profit:.0f}"
             resp += line + "\n"
             ts += s[3]; tr += sellout; tp += profit
@@ -832,6 +861,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # --- Import actions (handled by conversation entry points) ---
 
+@require_access
 async def add_item(update: Update, context: ContextTypes.DEFAULT_TYPE):
     args = context.args
     if len(args) < 3:
@@ -846,14 +876,20 @@ async def add_item(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"Added: {disp} {args[0]}, Qty: {args[2]}")
     except: await update.message.reply_text("Invalid input")
 
+@require_access
 async def import_stock(update: Update, context: ContextTypes.DEFAULT_TYPE):
     args = context.args
     if len(args) < 2: await update.message.reply_text("Usage: /import <item_id> <quantity>"); return
     try:
-        Database.update_item_quantity(int(args[0]), int(args[1]))
-        await update.message.reply_text(f"Added {args[1]} units to item {args[0]}")
+        qty = int(args[1])
+        if qty <= 0:
+            await update.message.reply_text("❌ Quantity must be positive.")
+            return
+        Database.update_item_quantity(int(args[0]), qty)
+        await update.message.reply_text(f"Added {qty} units to item {args[0]}")
     except: await update.message.reply_text("Invalid input")
 
+@require_access
 async def sell(update: Update, context: ContextTypes.DEFAULT_TYPE):
     args = context.args
     if len(args) < 2: await update.message.reply_text("Usage: /sell <item_id> <quantity>"); return
@@ -867,6 +903,7 @@ async def sell(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"Sold {qty} units of {item[1]}")
     except: await update.message.reply_text("Invalid input")
 
+@require_access
 async def list_items(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cat = context.args[0] if context.args else None
     items = Database.list_items(cat)
@@ -878,6 +915,7 @@ async def list_items(update: Update, context: ContextTypes.DEFAULT_TYPE):
         resp += f"ID:{i[0]} {disp}{i[1]}{spec} ({i[2]}) Qty:{i[3]} Retail:${i[4] or 'N/A'}\n"
     await update.message.reply_text(resp)
 
+@require_access
 async def report(update: Update, context: ContextTypes.DEFAULT_TYPE):
     args = context.args; cat=None; sd=None; ed=None
     if len(args)>=1: cat=args[0]
@@ -893,6 +931,7 @@ async def report(update: Update, context: ContextTypes.DEFAULT_TYPE):
     resp += f"\nTotal Sales:{ts} Total Revenue:{tr}"
     await update.message.reply_text(resp)
 
+@require_access
 async def add_brand(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(context.args) < 2:
         await update.message.reply_text("Usage: /addbrand <name> <emoji> [color]\nColor: 🔴🟠🟡🟢🔵🟣🟤⚫⚪\nExample: /addbrand Samsung 📱 🔵")
@@ -904,6 +943,7 @@ async def add_brand(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"Brand added: {color}{emoji} {name}")
     except: await update.message.reply_text("Invalid input")
 
+@require_access
 async def list_brands(update: Update, context: ContextTypes.DEFAULT_TYPE):
     brands = Database.list_brands()
     if not brands:
@@ -914,6 +954,7 @@ async def list_brands(update: Update, context: ContextTypes.DEFAULT_TYPE):
         resp += f"ID:{b[0]} {b[3]}{b[2]} {b[1]}\n"
     await update.message.reply_text(resp)
 
+@require_access
 async def delete_brand(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(context.args) < 1:
         await update.message.reply_text("Usage: /deletebrand <name>\nUse /listbrands to see brand names.")
@@ -1044,12 +1085,12 @@ conv_handler_item = ConversationHandler(
     entry_points=[CallbackQueryHandler(start_add, pattern="^inv_add$")],
     states={
         ADD_GROUP: [CallbackQueryHandler(get_add_group, pattern="^selgroup_")],
-        ADD_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_add_name), CallbackQueryHandler(guard_callback)],
+        ADD_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_add_name), CallbackQueryHandler(guard_callback, pattern="^(?!menu_).*$")],
         ADD_BRAND: [CallbackQueryHandler(get_add_brand, pattern="^selbrand_")],
-        ADD_RAM: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_add_ram), CallbackQueryHandler(guard_callback)],
-        ADD_ROM: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_add_rom), CallbackQueryHandler(guard_callback)],
-        ADD_QTY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_add_qty), CallbackQueryHandler(guard_callback)],
-        ADD_PRICE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_add_price), CallbackQueryHandler(guard_callback)],
+        ADD_RAM: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_add_ram), CallbackQueryHandler(guard_callback, pattern="^(?!menu_).*$")],
+        ADD_ROM: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_add_rom), CallbackQueryHandler(guard_callback, pattern="^(?!menu_).*$")],
+        ADD_QTY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_add_qty), CallbackQueryHandler(guard_callback, pattern="^(?!menu_).*$")],
+        ADD_PRICE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_add_price), CallbackQueryHandler(guard_callback, pattern="^(?!menu_).*$")],
     },
     fallbacks=[
         CommandHandler("cancel", cancel_add),
@@ -1086,7 +1127,7 @@ async def get_sel_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.user_data['sel_item_id'] = item[0]
             context.user_data['sel_item_name'] = item[1]
             context.user_data['sel_item_brand'] = item[2]
-            context.user_data['sel_retail'] = item[4]
+            context.user_data['sel_retail'] = item[4] or 0
             context.user_data['sel_cost'] = item[8] or 0
             context.user_data['sel_group'] = item[5] or item[2]
             context.user_data['sel_scanned_imei'] = code
@@ -1133,7 +1174,7 @@ async def get_sel_spec(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['sel_item_id'] = item[0]
     context.user_data['sel_item_name'] = item[1]
     context.user_data['sel_item_brand'] = item[2]
-    context.user_data['sel_retail'] = item[4]
+    context.user_data['sel_retail'] = item[4] or 0
     context.user_data['sel_cost'] = item[8] or 0
     context.user_data['sel_group'] = item[5] or item[2]
     spec = f" ({item[6]}/{item[7]})" if item[6] or item[7] else ''
@@ -1241,7 +1282,7 @@ async def complete_sellout(query_or_msg, context, fee=None):
             cur = conn.execute("SELECT i.name, i.category, i.quantity FROM items i WHERE i.quantity <= ? ORDER BY i.quantity ASC", (threshold,))
             low_items = cur.fetchall()
             if low_items:
-                lines = [f"• {item[1]} {item[0]} — *{item[2]} left*" for item in low_items]
+                lines = [f"• {escape_md(item[1])} {escape_md(item[0])} — *{item[2]} left*" for item in low_items]
                 msg = (
                     f"⚠️ *Low Stock Alert* (≤{threshold})\n\n"
                     + "\n".join(lines[:15])
@@ -1312,12 +1353,12 @@ async def cancel_sell_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 conv_handler_sell = ConversationHandler(
     entry_points=[CallbackQueryHandler(start_sell, pattern="^sell_record$")],
     states={
-        SEL_CODE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_sel_code), CallbackQueryHandler(guard_callback)],
+        SEL_CODE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_sel_code), CallbackQueryHandler(guard_callback, pattern="^(?!menu_).*$")],
         SEL_SPEC: [CallbackQueryHandler(get_sel_spec, pattern="^selcode_")],
-        SEL_PRICE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_sel_price), CallbackQueryHandler(guard_callback)],
+        SEL_PRICE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_sel_price), CallbackQueryHandler(guard_callback, pattern="^(?!menu_).*$")],
         SEL_DELIVERY: [CallbackQueryHandler(get_sel_delivery, pattern="^sel_delivery_(yes|no)$")],
-        SEL_FEE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_sel_fee), CallbackQueryHandler(guard_callback)],
-        SEL_NOTE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_sel_note), CallbackQueryHandler(guard_callback)],
+        SEL_FEE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_sel_fee), CallbackQueryHandler(guard_callback, pattern="^(?!menu_).*$")],
+        SEL_NOTE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_sel_note), CallbackQueryHandler(guard_callback, pattern="^(?!menu_).*$")],
     },
     fallbacks=[
         CommandHandler("cancel", cancel_sell),
@@ -1444,8 +1485,8 @@ async def brd_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 conv_handler_brand = ConversationHandler(
     entry_points=[CallbackQueryHandler(start_add_brand, pattern="^inv_add_brand$")],
     states={
-        BRD_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_brd_name), CallbackQueryHandler(guard_callback)],
-        BRD_EMOJI: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_brd_emoji), CallbackQueryHandler(guard_callback)],
+        BRD_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_brd_name), CallbackQueryHandler(guard_callback, pattern="^(?!menu_).*$")],
+        BRD_EMOJI: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_brd_emoji), CallbackQueryHandler(guard_callback, pattern="^(?!menu_).*$")],
         BRD_COLOR: [CallbackQueryHandler(get_brd_color, pattern="^brdcolor_")],
     },
     fallbacks=[CommandHandler("cancel", brd_cancel), CallbackQueryHandler(cancel_add_callback, pattern="^menu_inventory$")],
@@ -1456,8 +1497,10 @@ conv_handler_brand = ConversationHandler(
 # ──────────────────────────────
 IP_GROUP, IP_BRAND, IP_NAME, IP_RAM, IP_ROM, IP_PRICE, IP_DUP_ACTION, IP_DUP_QTY, IP_QTY = range(23, 32)
 IP_IMEI = 52
+
 IP_CODE = 53
 
+IP_COST = 54
 async def start_import_product(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -1520,6 +1563,23 @@ async def get_ip_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(_('msg_invalid_price', chat_id))
         return IP_PRICE
     context.user_data['ip_retail'] = retail
+    await update.message.reply_text("💲 Enter cost price, or 'skip' to keep existing:")
+    return IP_COST
+
+async def get_ip_cost(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data['conv_state'] = IP_COST
+    chat_id = update.effective_chat.id
+    text = update.message.text.strip()
+    if text.lower() == 'skip':
+        context.user_data.pop('ip_cost', None)
+    else:
+        try:
+            cost = float(text)
+            if cost <= 0: raise ValueError
+            context.user_data['ip_cost'] = cost
+        except:
+            await update.message.reply_text(_('msg_invalid_price', chat_id))
+            return IP_COST
     await update.message.reply_text("🔤 Enter product code (e.g., AP-IP14) or 'skip':")
     return IP_CODE
 
@@ -1597,6 +1657,7 @@ async def get_ip_dup_qty(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     try:
         qty = int(update.message.text)
+        if qty < 0: raise ValueError
     except:
         await update.message.reply_text(_('msg_invalid_qty', chat_id))
         return IP_DUP_QTY
@@ -1696,15 +1757,16 @@ conv_handler_import_product = ConversationHandler(
     states={
         IP_GROUP: [CallbackQueryHandler(get_ip_group, pattern="^ipgroup_")],
         IP_BRAND: [CallbackQueryHandler(get_ip_brand, pattern="^ipbrand_")],
-        IP_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_ip_name), CallbackQueryHandler(guard_callback)],
-        IP_RAM: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_ip_ram), CallbackQueryHandler(guard_callback)],
-        IP_ROM: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_ip_rom), CallbackQueryHandler(guard_callback)],
-        IP_PRICE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_ip_price), CallbackQueryHandler(guard_callback)],
-        IP_CODE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_ip_code), CallbackQueryHandler(guard_callback)],
-        IP_QTY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_ip_qty), CallbackQueryHandler(guard_callback)],
+        IP_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_ip_name), CallbackQueryHandler(guard_callback, pattern="^(?!menu_).*$")],
+        IP_RAM: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_ip_ram), CallbackQueryHandler(guard_callback, pattern="^(?!menu_).*$")],
+        IP_ROM: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_ip_rom), CallbackQueryHandler(guard_callback, pattern="^(?!menu_).*$")],
+        IP_PRICE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_ip_price), CallbackQueryHandler(guard_callback, pattern="^(?!menu_).*$")],
+        IP_COST: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_ip_cost), CallbackQueryHandler(guard_callback, pattern="^(?!menu_).*$")],
+        IP_CODE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_ip_code), CallbackQueryHandler(guard_callback, pattern="^(?!menu_).*$")],
+        IP_QTY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_ip_qty), CallbackQueryHandler(guard_callback, pattern="^(?!menu_).*$")],
         IP_DUP_ACTION: [CallbackQueryHandler(get_ip_dup_action, pattern="^ipdup_")],
-        IP_DUP_QTY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_ip_dup_qty), CallbackQueryHandler(guard_callback)],
-        IP_IMEI: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_ip_imei), CallbackQueryHandler(guard_callback)],
+        IP_DUP_QTY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_ip_dup_qty), CallbackQueryHandler(guard_callback, pattern="^(?!menu_).*$")],
+        IP_IMEI: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_ip_imei), CallbackQueryHandler(guard_callback, pattern="^(?!menu_).*$")],
     },
     fallbacks=[CommandHandler("cancel", ip_cancel), CallbackQueryHandler(cancel_add_callback, pattern="^menu_import$")],
 )
@@ -1785,7 +1847,7 @@ conv_handler_register_code = ConversationHandler(
     states={
         RC_BRAND: [CallbackQueryHandler(get_rc_brand, pattern="^rcbrand_")],
         RC_ITEM: [CallbackQueryHandler(get_rc_item, pattern="^rcitem_")],
-        RC_CODE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_rc_code), CallbackQueryHandler(guard_callback)],
+        RC_CODE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_rc_code), CallbackQueryHandler(guard_callback, pattern="^(?!menu_).*$")],
     },
     fallbacks=[CommandHandler("cancel", rc_cancel), CallbackQueryHandler(cancel_add_callback, pattern="^menu_inventory$")],
 )
@@ -1886,13 +1948,13 @@ async def ic_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 conv_handler_import_customer = ConversationHandler(
     entry_points=[CallbackQueryHandler(start_import_customer, pattern="^import_customer$")],
     states={
-        IC_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_ic_name), CallbackQueryHandler(guard_callback)],
-        IC_LOC: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_ic_loc), CallbackQueryHandler(guard_callback)],
-        IC_PH1: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_ic_ph1), CallbackQueryHandler(guard_callback)],
+        IC_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_ic_name), CallbackQueryHandler(guard_callback, pattern="^(?!menu_).*$")],
+        IC_LOC: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_ic_loc), CallbackQueryHandler(guard_callback, pattern="^(?!menu_).*$")],
+        IC_PH1: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_ic_ph1), CallbackQueryHandler(guard_callback, pattern="^(?!menu_).*$")],
         IC_MORE2: [CallbackQueryHandler(get_ic_more2, pattern="^ic_more2_")],
-        IC_PH2: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_ic_ph2), CallbackQueryHandler(guard_callback)],
+        IC_PH2: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_ic_ph2), CallbackQueryHandler(guard_callback, pattern="^(?!menu_).*$")],
         IC_MORE3: [CallbackQueryHandler(get_ic_more3, pattern="^ic_more3_")],
-        IC_PH3: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_ic_ph3), CallbackQueryHandler(guard_callback)],
+        IC_PH3: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_ic_ph3), CallbackQueryHandler(guard_callback, pattern="^(?!menu_).*$")],
     },
     fallbacks=[CommandHandler("cancel", ic_cancel), CallbackQueryHandler(cancel_add_callback, pattern="^menu_import$")],
 )
@@ -1951,9 +2013,9 @@ async def is_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 conv_handler_staff = ConversationHandler(
     entry_points=[CallbackQueryHandler(start_import_staff, pattern="^import_staff$")],
     states={
-        IS_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_is_name), CallbackQueryHandler(guard_callback)],
+        IS_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_is_name), CallbackQueryHandler(guard_callback, pattern="^(?!menu_).*$")],
         IS_ROLE: [CallbackQueryHandler(get_is_role, pattern="^isrole_")],
-        IS_PIN: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_is_pin), CallbackQueryHandler(guard_callback)],
+        IS_PIN: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_is_pin), CallbackQueryHandler(guard_callback, pattern="^(?!menu_).*$")],
     },
     fallbacks=[CommandHandler("cancel", is_cancel), CallbackQueryHandler(cancel_add_callback, pattern="^menu_import$")],
 )
@@ -2066,9 +2128,9 @@ conv_handler_debt = ConversationHandler(
     states={
         DEBT_CUST: [CallbackQueryHandler(get_debt_cust, pattern="^debtcust_")],
         DEBT_DATE: [CallbackQueryHandler(get_debt_date, pattern="^debt_date_")],
-        DEBT_DATE_INPUT: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_debt_date_input), CallbackQueryHandler(guard_callback)],
-        DEBT_AMT: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_debt_amt), CallbackQueryHandler(guard_callback)],
-        DEBT_NOTE: [CallbackQueryHandler(get_debt_note, pattern="^debt_note_no$"), MessageHandler(filters.TEXT & ~filters.COMMAND, get_debt_note), CallbackQueryHandler(guard_callback)],
+        DEBT_DATE_INPUT: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_debt_date_input), CallbackQueryHandler(guard_callback, pattern="^(?!menu_).*$")],
+        DEBT_AMT: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_debt_amt), CallbackQueryHandler(guard_callback, pattern="^(?!menu_).*$")],
+        DEBT_NOTE: [CallbackQueryHandler(get_debt_note, pattern="^debt_note_no$"), MessageHandler(filters.TEXT & ~filters.COMMAND, get_debt_note), CallbackQueryHandler(guard_callback, pattern="^(?!menu_).*$")],
     },
     fallbacks=[CommandHandler("cancel", debt_cancel), CallbackQueryHandler(cancel_add_callback, pattern="^menu_customers$")],
 )
@@ -2124,6 +2186,11 @@ async def get_pay_amt(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(_('msg_invalid_number', chat_id)); return PAY_AMT
     cid = context.user_data['pay_cust_id']
     schedule_id = context.user_data['pay_schedule_id']
+    conn = sqlite3.connect(DB_PATH)
+    row = conn.execute("SELECT amount FROM payment_schedules WHERE id=?", (schedule_id,)).fetchone()
+    conn.close()
+    total = row[0] if row else 0
+    amt = min(amt, total)
     Database.pay_schedule(schedule_id, amt)
     Database.record_transaction(cid, -amt, f"Payment for bill #{schedule_id}")
     cust = Database.get_customer(cid)
@@ -2143,7 +2210,7 @@ conv_handler_payment = ConversationHandler(
     states={
         PAY_CUST: [CallbackQueryHandler(get_pay_cust, pattern="^paycust_")],
         PAY_BILL: [CallbackQueryHandler(get_pay_bill, pattern="^paybill_")],
-        PAY_AMT: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_pay_amt), CallbackQueryHandler(guard_callback)],
+        PAY_AMT: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_pay_amt), CallbackQueryHandler(guard_callback, pattern="^(?!menu_).*$")],
     },
     fallbacks=[CommandHandler("cancel", pay_cancel), CallbackQueryHandler(cancel_add_callback, pattern="^menu_customers$")],
 )
@@ -2178,7 +2245,7 @@ async def get_bal_cust(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton(_('profile_inline_payment', chat_id), callback_data="cust_payment")],
         [InlineKeyboardButton(_('btn_back', chat_id), callback_data="menu_customers")],
     ]
-    msg = f"👤 *{cust[1]}*\n{_('profile_location', chat_id)} {cust[2] or _('report_none', chat_id)}\n{_('profile_phone', chat_id)} {phones or _('report_none', chat_id)}\n{_('profile_balance', chat_id)} ${bal:.2f}"
+    msg = f"👤 *{escape_md(cust[1])}*\n{_('profile_location', chat_id)} {escape_md(cust[2] or _('report_none', chat_id))}\n{_('profile_phone', chat_id)} {escape_md(phones or _('report_none', chat_id))}\n{_('profile_balance', chat_id)} ${bal:.2f}"
     await query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     clear_user_data(context)
     return ConversationHandler.END
@@ -2248,29 +2315,29 @@ async def payment_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query; await query.answer()
     chat_id = update.effective_chat.id
     rows = Database.get_overdue_report()
-    if not rows:
+    paid = Database.get_paid_report()
+    if not rows and not paid:
         await query.edit_message_text(_('msg_no_schedules', chat_id),
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(_('btn_back', chat_id), callback_data="menu_customers")]]))
         return
     today = datetime.now().strftime('%Y-%m-%d')
     overdue = [r for r in rows if r[4] < today and r[5] == 'pending']
     upcoming = [r for r in rows if r[4] >= today and r[5] == 'pending']
-    paid = [r for r in rows if r[5] == 'paid']
     resp = _('pay_report_title', chat_id) + "\n"
     if overdue:
         resp += "\n" + _('pay_overdue', chat_id) + "\n"
         for r in overdue[:10]:
             days = (datetime.now() - datetime.strptime(r[4], '%Y-%m-%d')).days
-            resp += f"  {r[2]} ${r[3]:.2f} ({_f('pay_days_overdue', chat_id, days=days)}, {_('pay_due', chat_id)} {r[4]})\n"
+            resp += f"  {escape_md(r[2])} ${r[3]:.2f} ({_f('pay_days_overdue', chat_id, days=days)}, {_('pay_due', chat_id)} {r[4]})\n"
     if upcoming:
         resp += "\n" + _('pay_upcoming', chat_id) + "\n"
         for r in upcoming[:10]:
             days = (datetime.strptime(r[4], '%Y-%m-%d') - datetime.now()).days
-            resp += f"  {r[2]} ${r[3]:.2f} ({_('pay_due', chat_id)} {days}d, {r[4]})\n"
+            resp += f"  {escape_md(r[2])} ${r[3]:.2f} ({_('pay_due', chat_id)} {days}d, {r[4]})\n"
     if paid:
         resp += "\n" + _('pay_paid', chat_id) + "\n"
         for r in paid[:5]:
-            resp += f"  {r[2]} ${r[3]:.2f} ({_('pay_status_done', chat_id)})\n"
+            resp += f"  {escape_md(r[2])} ${r[3]:.2f} ({_('pay_status_done', chat_id)})\n"
     await query.edit_message_text(resp, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(_('btn_back', chat_id), callback_data="menu_customers")]]), parse_mode='Markdown')
 
 # ──────────────────────────────
@@ -2465,14 +2532,14 @@ conv_handler_csr = ConversationHandler(
     states={
         CSR_CUST: [CallbackQueryHandler(get_csr_cust, pattern="^csrcust_")],
         CSR_DATE: [CallbackQueryHandler(get_csr_date, pattern="^csr_date_")],
-        CSR_DATE_INPUT: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_csr_date_input), CallbackQueryHandler(guard_callback)],
+        CSR_DATE_INPUT: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_csr_date_input), CallbackQueryHandler(guard_callback, pattern="^(?!menu_).*$")],
         CSR_GROUP: [CallbackQueryHandler(get_csr_group, pattern="^csrgroup_"), CallbackQueryHandler(csr_done_callback, pattern="^csr_done$")],
         CSR_BRAND: [CallbackQueryHandler(get_csr_brand, pattern="^csrbrand_")],
         CSR_ITEM: [CallbackQueryHandler(get_csr_item, pattern="^csritem_")],
-        CSR_QTY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_csr_qty), CallbackQueryHandler(guard_callback)],
-        CSR_PRICE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_csr_price), CallbackQueryHandler(guard_callback)],
+        CSR_QTY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_csr_qty), CallbackQueryHandler(guard_callback, pattern="^(?!menu_).*$")],
+        CSR_PRICE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_csr_price), CallbackQueryHandler(guard_callback, pattern="^(?!menu_).*$")],
         CSR_MORE: [CallbackQueryHandler(get_csr_more, pattern="^csr_more_")],
-        CSR_NOTE: [CallbackQueryHandler(get_csr_note, pattern="^csr_note_no$"), MessageHandler(filters.TEXT & ~filters.COMMAND, get_csr_note), CallbackQueryHandler(guard_callback)],
+        CSR_NOTE: [CallbackQueryHandler(get_csr_note, pattern="^csr_note_no$"), MessageHandler(filters.TEXT & ~filters.COMMAND, get_csr_note), CallbackQueryHandler(guard_callback, pattern="^(?!menu_).*$")],
     },
     fallbacks=[CommandHandler("cancel", csr_cancel), CallbackQueryHandler(cancel_add_callback, pattern="^menu_customers$")],
 )
@@ -2595,14 +2662,14 @@ async def check_stock_alerts(context: ContextTypes.DEFAULT_TYPE):
         if runout:
             lines.append(f"🆘 *Run Out of Stock* ({len(runout)})")
             for item in runout[:5]:
-                lines.append(f"• {item[1]} {item[0]} — *0 left*")
+                lines.append(f"• {escape_md(item[1])} {escape_md(item[0])} — *0 left*")
             if len(runout) > 5:
                 lines.append(f"  ... and {len(runout)-5} more")
             lines.append("")
         if low_items:
             lines.append(f"⚠️ *Low Stock Alert* (≤{threshold})")
             for item in low_items[:10]:
-                lines.append(f"• {item[1]} {item[0]} — *{item[2]} left*")
+                lines.append(f"• {escape_md(item[1])} {escape_md(item[0])} — *{item[2]} left*")
             if len(low_items) > 10:
                 lines.append(f"  ... and {len(low_items)-10} more")
         if not lines:

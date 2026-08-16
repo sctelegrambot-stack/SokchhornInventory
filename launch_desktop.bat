@@ -1,4 +1,8 @@
 @echo off
-cd /d "C:\sokchhorn_spare_pc"
-start "" "venv\Scripts\pythonw.exe" "desktop_app.py"
+cd /d "%~dp0"
+if exist "dist\InventoryBot.exe" (
+    start "" "dist\InventoryBot.exe"
+) else (
+    start "" "venv\Scripts\pythonw.exe" "desktop_app.py"
+)
 exit

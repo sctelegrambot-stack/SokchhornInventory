@@ -178,6 +178,7 @@
       </div>
     </div>
     <script>
+    var CSRF_TOKEN = '{{ csrf_token }}';
     var PRICES_UNLOCKED = {{ 'true' if session.get('prices_unlocked') else 'false' }};
     function getTheme() { return localStorage.getItem('theme') || 'light'; }
     function setTheme(t) {
@@ -196,11 +197,16 @@
       var cur = getTheme();
       setTheme(cur === 'dark' ? 'light' : 'dark');
       // Persist to server via AJAX so next page load uses correct theme
-      fetch('/set-theme', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:'theme='+(cur === 'dark' ? 'light' : 'dark') });
+      fetch('/set-theme', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:'theme='+(cur === 'dark' ? 'light' : 'dark')+'&csrf_token='+encodeURIComponent(CSRF_TOKEN) });
     }
     document.addEventListener('DOMContentLoaded', function() {
       setTheme(getTheme());
       document.getElementById('pinBubble').addEventListener('click', function(e) { if (e.target === this) hidePinBubble(); });
+      var tok = document.createElement('input');
+      tok.type = 'hidden'; tok.name = 'csrf_token'; tok.value = CSRF_TOKEN;
+      document.querySelectorAll('form').forEach(function(f) {
+        if (!f.querySelector('input[name="csrf_token"]')) f.appendChild(tok.cloneNode());
+      });
     });
     function showPinBubble() {
       document.getElementById('pinBubble').classList.remove('d-none');
@@ -215,13 +221,13 @@
       const pin = document.getElementById('pinInput').value;
       if (pin.length < 6) return;
       document.getElementById('pinError').classList.add('d-none');
-      fetch('/unlock-prices', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:'pin='+encodeURIComponent(pin) })
+      fetch('/unlock-prices', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:'pin='+encodeURIComponent(pin)+'&csrf_token='+encodeURIComponent(CSRF_TOKEN) })
         .then(r => r.ok ? r.json() : Promise.reject())
         .then(d => { if(d.ok) { hidePinBubble(); location.reload(); } })
         .catch(() => { document.getElementById('pinError').classList.remove('d-none'); document.getElementById('pinInput').value = ''; document.getElementById('pinInput').focus(); });
     }
     function lockPrices() {
-      fetch('/lock-prices').then(() => location.reload());
+      fetch('/lock-prices', { method:'POST', headers:{'X-CSRF-Token': CSRF_TOKEN} }).then(() => location.reload());
     }
     document.getElementById('pinInput').addEventListener('input', function() { if (this.value.length >= 6) submitPin(); });
     document.getElementById('pinInput').addEventListener('keydown', function(e) { if(e.key==='Enter') submitPin(); });

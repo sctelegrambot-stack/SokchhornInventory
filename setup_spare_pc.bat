@@ -38,6 +38,16 @@ if %errorlevel% equ 0 (
     echo [OK] ngrok downloaded to project folder.
 )
 echo.
+echo Step 5: Configuring ngrok authtoken...
+set NGROK_AUTHTOKEN=
+set /p NGROK_AUTHTOKEN=Enter your ngrok authtoken (https://dashboard.ngrok.com/get-started/your-authtoken) or press Enter to skip: 
+if not "%NGROK_AUTHTOKEN%"=="" (
+    ngrok config add-authtoken %NGROK_AUTHTOKEN%
+    echo [OK] ngrok authtoken configured.
+) else (
+    echo [SKIP] No authtoken set. ngrok tunnels will not open until you configure one.
+)
+echo.
 echo ============================================
 echo   SETUP COMPLETE!
 echo ============================================

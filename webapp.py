@@ -1,10 +1,10 @@
 import sqlite3
-import sys, os, io, json
+import sys, os, io, json, secrets
 from datetime import datetime, date, timedelta
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.worksheet.datavalidation import DataValidation
-from flask import Flask, render_template, request, redirect, url_for, session, flash, send_file, send_from_directory
+from flask import Flask, render_template, request, redirect, url_for, session, flash, send_file, send_from_directory, abort
 from werkzeug.security import generate_password_hash, check_password_hash
 import barcode
 from barcode.writer import SVGWriter
@@ -44,8 +44,69 @@ def get_secret_key():
 
 app.secret_key = get_secret_key()
 
+def ensure_csrf_token():
+    if 'csrf_token' not in session:
+        session['csrf_token'] = secrets.token_urlsafe(32)
+    return session['csrf_token']
+
+@app.before_request
+def csrf_protect():
+    if request.method != 'POST':
+        return None
+    expected = session.get('csrf_token')
+    if not expected:
+        return abort(403, 'CSRF validation failed')
+    supplied = (request.form.get('csrf_token')
+                or (request.get_json(silent=True) or {}).get('csrf_token')
+                or request.headers.get('X-CSRF-Token'))
+    if not supplied or not secrets.compare_digest(supplied, expected):
+        return abort(403, 'CSRF validation failed')
+    return None
+
+@app.context_processor
+def inject_csrf():
+    return {'csrf_token': ensure_csrf_token()}
+
 # init DB tables on import (so gunicorn picks it up)
 conn = sqlite3.connect(DB)
+conn.execute('''CREATE TABLE IF NOT EXISTS items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, category TEXT NOT NULL,
+    quantity INTEGER NOT NULL, price REAL,
+    group_name TEXT, ram TEXT, rom TEXT, cost_price REAL, product_code TEXT, barcode TEXT)''')
+conn.execute('''CREATE TABLE IF NOT EXISTS sales (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, item_id INTEGER NOT NULL, category TEXT NOT NULL,
+    quantity INTEGER NOT NULL, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    receipt_id INTEGER, returned INTEGER DEFAULT 0, returned_at DATETIME,
+    return_reason TEXT, created_by TEXT,
+    imei TEXT, sellout_price TEXT, delivery_fee TEXT, special_note TEXT)''')
+conn.execute('''CREATE TABLE IF NOT EXISTS customers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, phone TEXT,
+    credit REAL DEFAULT 0, location TEXT, phone2 TEXT, phone3 TEXT)''')
+conn.execute('''CREATE TABLE IF NOT EXISTS transactions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, customer_id INTEGER NOT NULL,
+    amount REAL NOT NULL, description TEXT,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+conn.execute('''CREATE TABLE IF NOT EXISTS brands (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE NOT NULL,
+    emoji TEXT NOT NULL DEFAULT '📦', color TEXT NOT NULL DEFAULT '⚪')''')
+conn.execute('''CREATE TABLE IF NOT EXISTS product_groups (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE NOT NULL,
+    emoji TEXT NOT NULL DEFAULT '📦', color TEXT NOT NULL DEFAULT '⚪')''')
+conn.execute('''CREATE TABLE IF NOT EXISTS staff (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL,
+    role TEXT DEFAULT 'staff', pin TEXT NOT NULL)''')
+conn.execute('''CREATE TABLE IF NOT EXISTS customer_sales (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, customer_id INTEGER NOT NULL,
+    item_id INTEGER NOT NULL, quantity INTEGER DEFAULT 1,
+    price_paid REAL, note TEXT, sale_date TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP, created_by TEXT)''')
+conn.execute('''CREATE TABLE IF NOT EXISTS payment_schedules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, customer_id INTEGER NOT NULL,
+    transaction_id INTEGER, due_date TEXT NOT NULL, amount REAL NOT NULL,
+    status TEXT DEFAULT 'pending', notes TEXT, created_by TEXT)''')
+conn.execute('''CREATE TABLE IF NOT EXISTS item_imeis (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    item_id INTEGER NOT NULL, imei TEXT NOT NULL UNIQUE, sold INTEGER DEFAULT 0)''')
 conn.execute('''CREATE TABLE IF NOT EXISTS admin (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT UNIQUE NOT NULL,
@@ -501,8 +562,12 @@ def settings():
                 launcher = os.path.join(os.path.dirname(__file__), 'launcher.py')
                 # Backup: also try the exe on Desktop
                 desktop_exe = os.path.join(os.environ['USERPROFILE'], 'Desktop', 'Inventory.exe')
-                target = desktop_exe if os.path.exists(desktop_exe) else f'"{python_exe}" "{launcher}"'
-                ws = __import__('win32com', fromlist=['client']).client.Dispatch('WScript.Shell')
+                target = f'"{desktop_exe}"' if os.path.exists(desktop_exe) else f'"{python_exe}" "{launcher}"'
+                try:
+                    ws = __import__('win32com', fromlist=['client']).client.Dispatch('WScript.Shell')
+                except ImportError:
+                    flash('Auto-startup requires pywin32 (pip install pywin32)', 'danger')
+                    return redirect(url_for('settings'))
                 sc = ws.CreateShortcut(startup_path)
                 import shlex
                 parts = shlex.split(target)
@@ -775,6 +840,7 @@ def add_stock():
                     avg_cost = cost_val
             else:
                 avg_cost = item['cost_price']
+                cost_val = item['cost_price']
             conn.execute("UPDATE items SET quantity = ?, cost_price = ? WHERE id = ?",
                          (new_qty, avg_cost, item_id))
             log_stock_movement(conn, item_id, 'addition', qty, item['quantity'], new_qty, cost_val or item['cost_price'], created_by=session.get('staff_name', '')) 
@@ -880,7 +946,7 @@ def edit_item():
 @login_required
 def delete_item(item_id):
     conn = get_db()
-    cur = conn.execute("SELECT name FROM items WHERE id = ?", (item_id,))
+    cur = conn.execute("SELECT name, quantity, cost_price FROM items WHERE id = ?", (item_id,))
     item = cur.fetchone()
     if not item:
         conn.close()
@@ -1157,9 +1223,9 @@ def schedules():
 def mark_paid():
     schedule_id = request.form.get('schedule_id')
     conn = get_db()
-    cur = conn.execute("SELECT amount, customer_id FROM payment_schedules WHERE id = ?", (schedule_id,))
+    cur = conn.execute("SELECT amount, customer_id, status FROM payment_schedules WHERE id = ?", (schedule_id,))
     sched = cur.fetchone()
-    if sched:
+    if sched and sched['status'] != 'paid':
         conn.execute("UPDATE payment_schedules SET status = 'paid', created_by = ? WHERE id = ?", (session.get('staff_name', ''), schedule_id))
         conn.execute("INSERT INTO transactions (customer_id, amount, description) VALUES (?,?,?)",
                      (sched['customer_id'], -sched['amount'], f'Payment for bill #{schedule_id}'))
@@ -1634,6 +1700,15 @@ def exports_list():
                 files.append({'name': f, 'size': size, 'modified': datetime.fromtimestamp(os.path.getmtime(fpath)).strftime('%Y-%m-%d %H:%M')})
     return render_template('exports.html', files=files)
 
+@app.route('/exports/download/<path:filename>')
+@login_required
+def export_download(filename):
+    safe = os.path.basename(filename)
+    fpath = os.path.join(EXPORTS_DIR, safe)
+    if not os.path.isfile(fpath):
+        abort(404)
+    return send_file(fpath, as_attachment=True, download_name=safe)
+
 @app.route('/inventory/download-template')
 @login_required
 def download_template():
@@ -1822,6 +1897,7 @@ def barcode_designer():
             grouped[brand] = []
         grouped[brand].append(item)
     layouts = [
+        {'id': 'a4_5x9', 'name': 'A4 - 5×9 (38×28mm)', 'page_w': 210, 'page_h': 297, 'cols': 5, 'rows': 9, 'lw': 38, 'lh': 28, 'margin': 5, 'gap': 2},
         {'id': 'a4_4x13', 'name': 'A4 - 4×13 (50×20mm)', 'page_w': 210, 'page_h': 297, 'cols': 4, 'rows': 13, 'lw': 50, 'lh': 20, 'margin': 2, 'gap': 2},
         {'id': 'a4_3x10', 'name': 'A4 - 3×10 (63×27mm)', 'page_w': 210, 'page_h': 297, 'cols': 3, 'rows': 10, 'lw': 63, 'lh': 27, 'margin': 5, 'gap': 3},
         {'id': 'a4_2x7', 'name': 'A4 - 2×7 (100×38mm)', 'page_w': 210, 'page_h': 297, 'cols': 2, 'rows': 7, 'lw': 100, 'lh': 38, 'margin': 5, 'gap': 3},
@@ -1848,12 +1924,13 @@ def barcode_export_pdf():
     data = request.get_json(silent=True) or {}
     slots = data.get('slots', [])
     encode = data.get('encode', 'code')
-    layout_id = data.get('layout', 'a4_4x13')
+    layout_id = data.get('layout', 'a4_5x9')
     layouts_map = {
+        'a4_5x9': (210, 297, 5, 9, 38.0, 28.0, 5, 2),
         'a4_4x13': (210, 297, 4, 13, 50.0, 20.0, 2, 2),
-        'a4_3x10': (210, 297, 3, 10, 63.0, 27.0, 5, 3),
+        'a4_3x10': (210, 297, 3, 10, 63.0, 26.0, 5, 2),
         'a4_2x7': (210, 297, 2, 7, 100.0, 38.0, 5, 3),
-        'a5_2x7': (148, 210, 2, 7, 74.0, 38.0, 3, 2),
+        'a5_2x7': (148, 210, 2, 7, 72.0, 27.0, 3, 1),
         'label_3x4': (210, 297, 3, 4, 66.0, 50.0, 5, 3),
         'label_2x5': (210, 297, 2, 5, 100.0, 50.0, 5, 3),
     }
@@ -1894,6 +1971,26 @@ def barcode_export_pdf():
             pdf.cell(LABEL_W-2, 4, safe[:30], align='C')
     pdf_bytes = pdf.output()
     return send_file(io.BytesIO(pdf_bytes), mimetype='application/pdf', as_attachment=True, download_name='barcodes.pdf')
+
+def reverse_customer_debt(conn, sale):
+    try:
+        receipt_id = sale['receipt_id']
+        if not receipt_id:
+            return
+        cur = conn.execute("SELECT customer_id FROM receipts WHERE id = ?", (receipt_id,))
+        receipt = cur.fetchone()
+        if not receipt or not receipt['customer_id']:
+            return
+        cust_id = receipt['customer_id']
+        qty = sale['quantity'] or 1
+        amount = qty * (float(sale['sellout_price'] or 0) + float(sale['delivery_fee'] or 0))
+        if amount <= 0:
+            return
+        conn.execute("UPDATE receipts SET total_amount = MAX(0, total_amount - ?) WHERE id = ?", (amount, receipt_id))
+        conn.execute("UPDATE payment_schedules SET amount = MAX(0, amount - ?) WHERE id = (SELECT id FROM payment_schedules WHERE customer_id = ? AND status = 'pending' ORDER BY due_date ASC LIMIT 1)", (amount, cust_id))
+        conn.execute("UPDATE customers SET credit = MAX(0, credit - ?) WHERE id = ?", (amount, cust_id))
+    except Exception:
+        pass
 
 @app.route('/sellout', methods=['GET'])
 @login_required
@@ -1962,6 +2059,11 @@ def customer_sellout_complete(cust_id):
             price = float(entry.get('price', 0))
             delivery = float(entry.get('delivery', 0))
             imei = entry.get('imei', '')
+            cur = conn.execute("SELECT name, quantity FROM items WHERE id = ?", (item_id,))
+            stock_row = cur.fetchone()
+            if not stock_row or stock_row['quantity'] < qty:
+                errors.append(f'Item #{item_id} ({"insufficient stock" if stock_row else "not found"}): {stock_row["quantity"] if stock_row else 0} left, {qty} requested')
+                continue
             for _ in range(qty):
                 cur = conn.execute(
                     "INSERT INTO sales (item_id, category, quantity, sellout_price, delivery_fee, special_note, imei) VALUES (?,?,?,?,?,?,?)",
@@ -1983,8 +2085,9 @@ def customer_sellout_complete(cust_id):
             errors.append(str(e))
     if sold > 0:
         from datetime import datetime
+        import random
         now = datetime.now()
-        receipt_no = f'RCP-{now.strftime("%Y%m%d")}-{now.strftime("%H%M%S")}'
+        receipt_no = f'RCP-{now.strftime("%Y%m%d")}-{now.strftime("%H%M%S")}-{random.randint(100,999)}'
         cur = conn.execute(
             "INSERT INTO receipts (receipt_no, customer_id, customer_name, total_amount) VALUES (?,?,?,?)",
             (receipt_no, cust_id, customer['name'], total_amount))
@@ -2064,6 +2167,11 @@ def sellout_complete():
             delivery = float(entry.get('delivery', 0))
             note = entry.get('note', '')
             imei = entry.get('imei', '')
+            cur = conn.execute("SELECT name, quantity FROM items WHERE id = ?", (item_id,))
+            stock_row = cur.fetchone()
+            if not stock_row or stock_row['quantity'] < qty:
+                errors.append(f'Item #{item_id} ({"insufficient stock" if stock_row else "not found"}): {stock_row["quantity"] if stock_row else 0} left, {qty} requested')
+                continue
             for _ in range(qty):
                 cur = conn.execute(
                     "INSERT INTO sales (item_id, category, quantity, sellout_price, delivery_fee, special_note, imei) VALUES (?,?,?,?,?,?,?)",
@@ -2081,8 +2189,9 @@ def sellout_complete():
             errors.append(str(e))
     if sold > 0:
         from datetime import datetime
+        import random
         now = datetime.now()
-        receipt_no = f'RCP-{now.strftime("%Y%m%d")}-{now.strftime("%H%M%S")}'
+        receipt_no = f'RCP-{now.strftime("%Y%m%d")}-{now.strftime("%H%M%S")}-{random.randint(100,999)}'
         cur = conn.execute(
             "INSERT INTO receipts (receipt_no, total_amount) VALUES (?,?)",
             (receipt_no, total_amt))
@@ -2187,6 +2296,7 @@ def delete_sale(sale_id):
     item_id = sale['item_id']
     qty = sale['quantity'] or 1
     imei = sale['imei'] or ''
+    reverse_customer_debt(conn, sale)
     conn.execute("DELETE FROM sales WHERE id = ?", (sale_id,))
     conn.execute("UPDATE items SET quantity = quantity + ? WHERE id = ?", (qty, item_id))
     log_stock_movement(conn, item_id, 'restore', qty, reference=f'sale #{sale_id} deleted')
@@ -2213,6 +2323,7 @@ def return_sale(sale_id):
         flash('Sale already returned', 'warning')
         return redirect(url_for('sales'))
     qty = sale['quantity'] or 1
+    reverse_customer_debt(conn, sale)
     conn.execute("UPDATE sales SET returned = 1, returned_at = datetime('now'), return_reason = ? WHERE id = ?", (reason or None, sale_id))
     conn.execute("UPDATE items SET quantity = quantity + ? WHERE id = ?", (qty, sale['item_id']))
     log_stock_movement(conn, sale['item_id'], 'return', qty, reference=f'sale #{sale_id} returned', price=sale['sellout_price'] or 0)

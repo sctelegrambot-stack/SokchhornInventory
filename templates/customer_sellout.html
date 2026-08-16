@@ -97,11 +97,19 @@ function doScan(code) {
 }
 
 function showMultipleChoices(choices, code) {
-  var lines = ['<div class="alert alert-info p-2 mb-2"><small>Multiple items for code <strong>'+code+'</strong>:</small></div>'];
+  var fb = document.getElementById('scanFeedback');
+  fb.innerHTML = '';
+  var head = document.createElement('div');
+  head.className = 'alert alert-info p-2 mb-2';
+  head.appendChild(document.createTextNode('Multiple items for code ' + code + ':'));
+  fb.appendChild(head);
   choices.forEach(function(c) {
-    lines.push('<button class="btn btn-outline-primary btn-sm me-1 mb-1" onclick="addFromChoice('+c.id+',\''+c.name+'\',\''+c.brand+'\','+(c.price||0)+')">'+c.brand+' '+c.name+' ($'+(c.price||0)+')</button>');
+    var b = document.createElement('button');
+    b.className = 'btn btn-outline-primary btn-sm me-1 mb-1';
+    b.textContent = c.brand + ' ' + c.name + ' ($' + (c.price || 0) + ')';
+    b.addEventListener('click', function() { addFromChoice(c.id, c.name, c.brand, c.price || 0); });
+    fb.appendChild(b);
   });
-  document.getElementById('scanFeedback').innerHTML = lines.join('');
 }
 
 function addFromChoice(id, name, brand, price) {
@@ -114,7 +122,7 @@ function addToCart(item, imei) {
   var existing = cart.findIndex(function(c) { return c.id === item.id && c.imei === imei; });
   if (existing >= 0) {
     cart[existing].qty += 1;
-    document.getElementById('scanFeedback').innerHTML = '<span class="text-success">+1 ' + cart[existing].name + ' (total: ' + cart[existing].qty + ')</span>';
+    document.getElementById('scanFeedback').innerHTML = '<span class="text-success">+1 ' + esc(cart[existing].name) + ' (total: ' + cart[existing].qty + ')</span>';
     renderCart();
     return;
   }
@@ -142,6 +150,8 @@ function updateCartField(idx, field, value) {
   updateTotal();
 }
 
+function esc(s){return String(s).replace(/[&<>"']/g,function(m){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m];});}
+
 function renderCart() {
   var container = document.getElementById('cartContainer');
   var empty = document.getElementById('emptyCart');
@@ -161,8 +171,8 @@ function renderCart() {
   cart.forEach(function(c, i) {
     html += '<div class="cart-item">';
     html += '<span class="remove-btn" onclick="removeFromCart('+i+')">&times;</span>';
-    html += '<div class="item-info"><strong>'+c.brand_emoji+' '+c.brand+' '+c.name+'</strong>';
-    if (c.imei) html += '<br><small>IMEI: '+c.imei+'</small>';
+    html += '<div class="item-info"><strong>'+esc(c.brand_emoji)+' '+esc(c.brand)+' '+esc(c.name)+'</strong>';
+    if (c.imei) html += '<br><small>IMEI: '+esc(c.imei)+'</small>';
     html += '<br><small>Retail: $'+(c.price.toFixed(2)||'0.00')+'</small></div>';
     html += '<label class="small mb-0">Qty <input type="number" class="form-control form-control-sm" value="'+c.qty+'" min="1" step="1" onchange="updateCartField('+i+',\'qty\',Math.max(1,parseInt(this.value)||1))" onfocus="this.select()" style="width:70px"></label>';
     html += '<label class="small mb-0">Price <input type="number" class="form-control form-control-sm" value="'+c.sellPrice.toFixed(2)+'" min="0" step="0.01" onchange="updateCartField('+i+',\'sellPrice\',this.value)" onfocus="this.select()"></label>';
@@ -193,7 +203,8 @@ function completeSale() {
     body: JSON.stringify({
       cart: cart,
       due_date: document.getElementById('dueDate').value,
-      notes: document.getElementById('selloutNotes').value
+      notes: document.getElementById('selloutNotes').value,
+      csrf_token: CSRF_TOKEN
     })
   })
   .then(function(r) { return r.json(); })

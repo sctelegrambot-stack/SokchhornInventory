@@ -4,3 +4,4 @@ flask
 werkzeug
 openpyxl
 gunicorn
+pywebview
