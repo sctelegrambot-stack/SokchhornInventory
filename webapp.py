@@ -1,6 +1,7 @@
 import sqlite3
 import html
 import re
+import hashlib
 import sys, os, io, json, secrets
 from datetime import datetime, date, timedelta
 import openpyxl
@@ -155,6 +156,12 @@ try:
     conn.execute("ALTER TABLE customer_sales ADD COLUMN created_by TEXT")
 except:
     pass
+conn.execute('''CREATE TABLE IF NOT EXISTS password_resets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    admin_id INTEGER NOT NULL,
+    code_hash TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    used INTEGER DEFAULT 0)''')
 conn.execute('''CREATE TABLE IF NOT EXISTS stock_movements (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     item_id INTEGER, item_name TEXT, item_category TEXT,
@@ -489,7 +496,83 @@ def login():
         flash('Invalid username or password', 'danger')
     return render_template('login.html')
 
-@app.route('/logout')
+def send_telegram_message(text):
+    token = os.environ.get('TELEGRAM_BOT_TOKEN', '')
+    if not token:
+        return False
+    try:
+        import httpx
+        ids = get_config('alert_chat_ids', '')
+        chats = [x.strip() for x in ids.split(',') if x.strip().isdigit()]
+        if not chats:
+            return False
+        for cid in chats:
+            httpx.post(
+                f'https://api.telegram.org/bot{token}/sendMessage',
+                json={'chat_id': int(cid), 'text': text},
+                timeout=10,
+            )
+        return True
+    except Exception:
+        return False
+
+@app.route('/forgot-password', methods=['GET', 'POST'])
+def forgot_password():
+    if 'admin_id' in session:
+        return redirect(url_for('dashboard'))
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        conn = get_db()
+        admin = conn.execute("SELECT * FROM admin WHERE username = ?", (username,)).fetchone()
+        if admin:
+            code = secrets.token_hex(4).upper()
+            conn.execute("UPDATE password_resets SET used = 1 WHERE admin_id = ? AND used = 0", (admin['id'],))
+            conn.execute(
+                "INSERT INTO password_resets (admin_id, code_hash) VALUES (?, ?)",
+                (admin['id'], hashlib.sha256(code.encode()).hexdigest()))
+            conn.commit()
+            send_telegram_message(
+                f'Password reset request for "{username}".\nReset code: {code}\nValid for 15 minutes.')
+        conn.close()
+        flash('If that username exists, a reset code was sent to the admin Telegram.', 'info')
+        return redirect(url_for('forgot_password'))
+    return render_template('forgot_password.html')
+
+@app.route('/reset-password', methods=['GET', 'POST'])
+def reset_password():
+    if 'admin_id' in session:
+        return redirect(url_for('dashboard'))
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        code = request.form.get('code', '').strip().upper()
+        new_pass = request.form.get('new_password', '')
+        confirm = request.form.get('confirm', '')
+        if new_pass != confirm:
+            flash('New passwords do not match', 'danger')
+        else:
+            err = validate_password(new_pass)
+            if err:
+                flash(err, 'danger')
+            else:
+                conn = get_db()
+                admin = conn.execute("SELECT * FROM admin WHERE username = ?", (username,)).fetchone()
+                reset = None
+                if admin:
+                    reset = conn.execute(
+                        "SELECT * FROM password_resets WHERE admin_id = ? AND used = 0 "
+                        "AND created_at >= datetime('now', '-15 minutes') ORDER BY id DESC LIMIT 1",
+                        (admin['id'],)).fetchone()
+                if admin and reset and reset['code_hash'] == hashlib.sha256(code.encode()).hexdigest():
+                    conn.execute("UPDATE password_resets SET used = 1 WHERE id = ?", (reset['id'],))
+                    conn.execute("UPDATE admin SET password_hash = ? WHERE id = ?",
+                                 (generate_password_hash(new_pass), admin['id']))
+                    conn.commit()
+                    conn.close()
+                    flash('Password reset successfully. Please log in.', 'success')
+                    return redirect(url_for('login'))
+                conn.close()
+                flash('Invalid username, code, or expired code.', 'danger')
+    return render_template('reset_password.html')
 def logout():
     session.clear()
     flash('Logged out', 'info')
